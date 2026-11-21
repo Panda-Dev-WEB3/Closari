@@ -10,6 +10,15 @@ describe("multiplier rule (I11)", () => {
     ).toHaveLength(1);
     expect(multiplierViolations("src/X.sol", "x = a / day.multiplierSnapshot;")).toHaveLength(1);
   });
+  test("flags evasive forms", () => {
+    for (const l of [
+      "price*uiMultiplier/1e18",
+      "FixedPointMathLib.mulDiv(price, uiMultiplier, 1e18)",
+      "price.mulWad(day.multiplierSnapshot)",
+      "p ** mult",
+    ])
+      expect(multiplierViolations("src/X.sol", l)).toHaveLength(1);
+  });
   test("allows assignments, comparisons, comments and PriceMath", () => {
     expect(multiplierViolations("src/X.sol", "day.multiplierSnapshot = mult;")).toHaveLength(0);
     expect(

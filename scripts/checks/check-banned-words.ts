@@ -45,11 +45,18 @@ export function bannedIn(source: string): string[] {
 
 if (import.meta.main) {
   const root = join(import.meta.dir, "..", "..");
-  const globs = ["contracts/src/**/*.sol", "packages/*/src/**/*.ts", "packages/*/scripts/**/*.ts"];
+  const globs = [
+    "contracts/src/**/*.sol",
+    "contracts/script/**/*.sol",
+    "packages/*/src/**/*.ts",
+    "packages/*/scripts/**/*.ts",
+    "apps/*/src/**/*.{ts,tsx,js,jsx}",
+  ];
   const errors: string[] = [];
   for (const g of globs) {
     for (const f of new Glob(g).scanSync(root)) {
-      if (f.replaceAll("\\", "/").includes("contracts/src/vendor/")) continue;
+      const norm = f.replaceAll("\\", "/");
+      if (norm.includes("contracts/src/vendor/") || norm.startsWith("scripts/checks/")) continue;
       const hits = bannedIn(readFileSync(join(root, f), "utf8"));
       if (hits.length) errors.push(`${f}: ${hits.join(", ")}`);
     }

@@ -1,11 +1,12 @@
 // I11: a stock-token multiplier only appears in arithmetic inside contracts/src/lib/PriceMath.sol.
+// Known gap (review-only): aliasing a multiplier into another variable name evades this check.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
 
 const ALLOWED = "src/lib/PriceMath.sol";
 const MULT = /multiplier|\bmult\b/i;
-const ARITH = /(\s[*/]\s)|([*/]=)/;
+const ARITH = /[*/%]|\b(mulDiv\w*|mulWad\w*|divWad\w*|fullMul\w*|rpow|sMulWad|sDivWad)\b/;
 
 export function multiplierViolations(file: string, text: string): string[] {
   if (file.replaceAll("\\", "/").endsWith(ALLOWED)) return [];
