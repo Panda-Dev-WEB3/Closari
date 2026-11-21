@@ -439,6 +439,181 @@ contract LMSRMarketTest is MarketFixture {
         }
     }
 
+    // ---------------------------------------------------------------- initialize: every BadConfig condition
+
+    function _expectBadConfig(ILMSRMarket.Config memory c, address pool_, address oracle_) internal {
+        LMSRMarket c2 = LMSRMarket(_clone());
+        vm.expectRevert(ILMSRMarket.BadConfig.selector);
+        c2.initialize(c, pool_, oracle_, router, address(0));
+    }
+
+    function _cfg(uint256 n) internal view returns (ILMSRMarket.Config memory c) {
+        c = _config(n == 2 ? IMarketFactory.Kind.ABOVE : IMarketFactory.Kind.RANGE, _uniform(n), BUDGET);
+    }
+
+    function test_init_badConfig_eachCondition() public {
+        ILMSRMarket.Config memory c;
+        // n < 2 (prior length matches, so only the count is wrong)
+        c = _cfg(2);
+        c.n = 1;
+        c.priorWad = new uint256[](1);
+        c.priorWad[0] = 1e18;
+        _expectBadConfig(c, address(pool), oracle);
+        // n > 8
+        c = _cfg(9);
+        _expectBadConfig(c, address(pool), oracle);
+        // prior length != n
+        c = _cfg(3);
+        c.priorWad = _uniform(2);
+        _expectBadConfig(c, address(pool), oracle);
+        // bWad == 0
+        c = _cfg(2);
+        c.bWad = 0;
+        _expectBadConfig(c, address(pool), oracle);
+        // bWad > uint128
+        c = _cfg(2);
+        c.bWad = uint256(type(uint128).max) + 1;
+        _expectBadConfig(c, address(pool), oracle);
+        // createdTs >= haltTs
+        c = _cfg(2);
+        c.createdTs = c.haltTs;
+        _expectBadConfig(c, address(pool), oracle);
+        // haltTs >= closeTs
+        c = _cfg(2);
+        c.haltTs = c.closeTs;
+        _expectBadConfig(c, address(pool), oracle);
+        // rampMax > 500
+        c = _cfg(2);
+        c.rampMaxBps = Constants.MAX_RAMP_BPS + 1;
+        _expectBadConfig(c, address(pool), oracle);
+        // pool == 0, oracle == 0
+        c = _cfg(2);
+        _expectBadConfig(c, address(0), oracle);
+        _expectBadConfig(c, address(pool), address(0));
+        // a prior entry below PRIOR_MIN, with the sum still 1e18
+        c = _cfg(3);
+        (c.priorWad[0], c.priorWad[1], c.priorWad[2]) = (Constants.PRIOR_MIN - 1, 5e17, 5e17 - Constants.PRIOR_MIN + 1);
+        _expectBadConfig(c, address(pool), oracle);
+    }
+
+    function test_init_acceptsBounds() public {
+        ILMSRMarket.Config memory c = _cfg(8);
+        c.baseFeeBps = Constants.MAX_BASE_FEE_BPS;
+        c.rampMaxBps = Constants.MAX_RAMP_BPS;
+        c.bWad = type(uint128).max;
+        c.haltTs = c.createdTs + 1;
+        c.closeTs = c.haltTs + 1;
+        LMSRMarket c2 = LMSRMarket(_clone());
+        c2.initialize(c, address(pool), oracle, router, address(0));
+        assertEq(c2.config().n, 8);
+        assertEq(c2.config().rampMaxBps, 500);
+    }
+
+    // ---------------------------------------------------------------- CA window lower edge
+
+    function test_caWindow_lowerEdge() public {
+        token.schedule(2e18, CREATED); // effective exactly at createdTs: inside the window
+        _expectCA();
+        token.schedule(2e18, CREATED - 1); // one second before the market existed: outside the window
+        _buy(m, alice, 0, 1e6);
+        _sell(m, alice, 0, 1e6);
+    }
+
+    // ---------------------------------------------------------------- the Trade event
+
+    function test_tradeEvent_exactFields() public {
+        (uint256 g, uint256 f) = m.quoteBuy(1, 100e6, alice);
+        uint256 snap = vm.snapshotState();
+        _buy(m, alice, 1, 100e6);
+        uint256[] memory pAfter = m.prices();
+        vm.revertToState(snap);
+        vm.expectEmit(true, true, true, true, address(m));
+        emit ILMSRMarket.Trade(alice, 1, true, 100e6, g, f, builder, pAfter);
+        vm.prank(alice);
+        m.buy(1, 100e6, type(uint256).max, type(uint64).max, builder);
+
+        (g, f) = m.quoteSell(1, 40e6, alice);
+        snap = vm.snapshotState();
+        _sell(m, alice, 1, 40e6);
+        pAfter = m.prices();
+        vm.revertToState(snap);
+        vm.expectEmit(true, true, true, true, address(m));
+        emit ILMSRMarket.Trade(alice, 1, false, 40e6, g, f, address(0), pAfter);
+        vm.prank(alice);
+        m.sell(1, 40e6, 0, type(uint64).max, address(0));
+    }
+
+    // ---------------------------------------------------------------- pool marks on the sell side
+
+    function test_sell_marksPool_deltas() public {
+        _buy(m, alice, 1, 100e6);
+        int256 w0 = pool.worst(address(m));
+        int256 b0 = pool.best(address(m));
+        uint256 calls = pool.markCalls();
+        uint256 cash0 = m.cash();
+        (uint256 g,) = m.quoteSell(1, 40e6, alice);
+        _sell(m, alice, 1, 40e6);
+        assertEq(pool.markCalls(), calls + 1);
+        // worst = cash - max liability: cash falls by gross, the liability on outcome 1 falls by 40 shares
+        assertEq(pool.worst(address(m)) - w0, int256(40e6) - int256(g));
+        assertGt(pool.worst(address(m)), w0);
+        // best = cash - min liability (outcome 0 has none): falls by gross
+        assertEq(pool.best(address(m)) - b0, -int256(g));
+        assertEq(m.cash(), cash0 - g);
+        assertEq(pool.worst(address(m)), int256(m.cash() - m.liability()));
+        assertEq(pool.best(address(m)), int256(m.cash()));
+    }
+
+    // ---------------------------------------------------------------- I2 after mixed sequences
+
+    function test_I2_balanceCoversCashAndEscrow() public {
+        stakingMock.set(bob, 1_234);
+        address[3] memory who = [alice, bob, carol];
+        for (uint256 i; i < 12; ++i) {
+            address a = who[i % 3];
+            uint8 k = uint8(i % 2);
+            _buy(m, a, k, (i + 1) * 7e6);
+            if (i % 3 == 2) _sell(m, a, k, (i + 1) * 3e6);
+            vm.warp(block.timestamp + 1_000);
+            uint256 bal = usdg.balanceOf(address(m));
+            assertGe(bal, m.cash() + m.feeEscrow(), "I2");
+            assertEq(bal, m.cash() + m.feeEscrow()); // nothing else moves USDG in M2
+        }
+        vm.warp(HALT - 600); // inside the ramp
+        _buy(m, carol, 0, 5e6);
+        _sell(m, carol, 0, 5e6);
+        assertGe(usdg.balanceOf(address(m)), m.cash() + m.feeEscrow(), "I2 in the ramp");
+    }
+
+    // ---------------------------------------------------------------- NotTrading (M3 moves the state)
+
+    /// M2 never leaves `Trading`; M3's resolve/void will. Write the state byte directly (slot 0, byte 26 of the packed
+    /// `Core`) to pin that every trading entry point and `setOpenReference` refuse a non-trading market.
+    function test_notTrading_guards() public {
+        LMSRMarket u = _market(IMarketFactory.Kind.UPDOWN, _uniform(2), BUDGET);
+        _buy(m, alice, 0, 1e6);
+        for (uint256 st = 1; st <= 2; ++st) {
+            _setState(address(m), st);
+            _setState(address(u), st);
+            assertEq(uint256(m.state()), st);
+            vm.startPrank(alice);
+            vm.expectRevert(ILMSRMarket.NotTrading.selector);
+            m.buy(0, 1e6, type(uint256).max, type(uint64).max, address(0));
+            vm.expectRevert(ILMSRMarket.NotTrading.selector);
+            m.sell(0, 1e6, 0, type(uint64).max, address(0));
+            vm.stopPrank();
+            vm.prank(oracle);
+            vm.expectRevert(ILMSRMarket.NotTrading.selector);
+            u.setOpenReference(18_800_000_000, 1e6);
+        }
+    }
+
+    function _setState(address mk, uint256 st) internal {
+        uint256 v = uint256(vm.load(mk, bytes32(0)));
+        v = (v & ~(uint256(0xff) << 208)) | (st << 208);
+        vm.store(mk, bytes32(0), bytes32(v));
+    }
+
     function _clone() internal returns (address) {
         return LibClone.clone(address(impl));
     }

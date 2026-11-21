@@ -38,9 +38,11 @@ runs = 50000
 depth = 200
 
 # Coverage instruments every opcode: run lighter fuzz/invariant campaigns there. The full-strength campaigns run in
-# `test` (and nightly).
+# `test` (and nightly). A fixed seed makes the coverage gate deterministic run to run. Foundry 1.8.1 has no
+# `invariant.seed` key: the invariant campaigns draw from `fuzz.seed` as well.
 [profile.coverage.fuzz]
 runs = 256
+seed = "0x4d32"
 
 [profile.coverage.invariant]
 runs = 32
