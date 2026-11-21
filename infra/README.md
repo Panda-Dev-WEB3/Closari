@@ -35,7 +35,9 @@ On a host where another web server already owns ports 80/443, skip the Caddy sta
 2. `sudo install -d -o $USER /opt/closari && git clone --recurse-submodules https://github.com/Panda-Dev-WEB3/Closari.git /opt/closari/repo`
 3. Point the domain at the host, then `/opt/closari/repo/infra/shared-host/deploy.sh <domain>`.
 
-The script installs Foundry v1.8.1 under `/opt/closari/toolchain`, builds, publishes `apps/site/dist` to `/var/www/closari`, adds an nginx vhost (certbot adds TLS on first install), and runs `closari-devnet.service`: anvil on `127.0.0.1:18545` (never exposed), with the M1 contracts deployed once by `DeployLocal.s.sol` (addresses in `/opt/closari/devnet/deploy.log`). To update, `git pull` and run the script again.
+The script installs Foundry v1.8.1 under `/opt/closari/toolchain`, builds, publishes `apps/site/dist` to `/var/www/closari`, adds an nginx vhost (certbot adds TLS on first install), and runs `closari-devnet.service`: anvil on `127.0.0.1:18545` (never exposed), with the contracts deployed once by `DeployLocal.s.sol` (the real `LMSRMarket` with mock pool, oracle and router; addresses in `/opt/closari/devnet/deploy.log`). To update, `git pull` and run the script again.
+
+anvil persists the chain in `/opt/closari/devnet/state.json`, so a plain re-run keeps the existing deployment: the deployer nonce is already above 0 and the deploy step is skipped. After a contract change, run `REDEPLOY=1 /opt/closari/repo/infra/shared-host/deploy.sh <domain>`. It stops `closari-devnet`, deletes `state.json`, starts the service again, waits for the RPC and deploys the current contracts. Every devnet address and balance is reset.
 
 ## Later milestones
 

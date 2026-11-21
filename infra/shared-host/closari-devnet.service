@@ -1,5 +1,5 @@
 # Closari local devnet: anvil on loopback only, chain id 31337, deployed with contracts/script/DeployLocal.s.sol
-# (mocks for pool/oracle/router/market). It uses anvil's PUBLIC test keys and is never reachable from outside.
+# (real LMSRMarket; mocks for pool/oracle/router). It uses anvil's PUBLIC test keys and is never reachable from outside.
 # Installed by infra/shared-host/deploy.sh with __USER__, __ANVIL__, __PORT__ and __STATE__ filled in.
 [Unit]
 Description=Closari devnet (anvil, loopback only)
