@@ -10,3 +10,6 @@ export { iClsrStakingAbi } from "./IClsrStaking.ts";
 export { iStockTokenAbi } from "./IStockToken.ts";
 export { iBeaconAbi } from "./IBeacon.ts";
 export { iUSDGAbi } from "./IUSDG.ts";
+export { exchangeCalendarAbi } from "./ExchangeCalendar.ts";
+export { stockTokenAllowListAbi } from "./StockTokenAllowList.ts";
+export { marketFactoryAbi } from "./MarketFactory.ts";
