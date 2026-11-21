@@ -52,6 +52,8 @@ interface ILMSRMarket {
     event Voided(uint8 reason, uint256[] voidPricesWad);
     event Claimed(address indexed account, uint256 amount);
     event ClaimDeferred(address indexed account, uint256 amount);
+    /// @dev Under the pull model (Backend §3.8) sweep does not move fees: the router pulls them with pullFees.
+    ///      feesToRouter reports fees already pulled by the router, which may be 0.
     event Swept(uint256 toPool, uint256 feesToRouter);
 
     function initialize(Config calldata c, address pool, address oracle, address router, address staking) external;
@@ -92,7 +94,18 @@ interface ILMSRMarket {
 
     function claim(address account) external returns (uint256 paid);
     function claimMany(address[] calldata accounts) external;
+    /// @notice Sends the final market's surplus to the pool. Does not move fees (pull model); see Swept.
     function sweep() external;
+
+    /// @notice Fees held by this market and not yet pulled by the router or refunded.
+    function feeEscrow() external view returns (uint256);
+    function feesPaid(address account) external view returns (uint256);
+    function feesByBuilder(address builder) external view returns (uint256);
+    /// @notice Sum of fees attributed to non-zero builders.
+    function builderFeesTotal() external view returns (uint256);
+    /// @notice Only the fee router, only when state == Resolved. Transfers feeEscrow to the router; a second call
+    ///         returns 0 (Backend §3.8: distribute pulls feeEscrow from a resolved market).
+    function pullFees() external returns (uint256 amount);
 
     function shares(address account, uint8 outcome) external view returns (uint256);
     function liability() external view returns (uint256);

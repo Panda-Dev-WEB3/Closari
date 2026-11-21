@@ -12,10 +12,14 @@ interface IFeeRouter {
         uint256 toBuilders,
         uint256 builderlessToPool
     );
+    event BountyFunded(address indexed from, uint256 amount);
 
     function distribute(address market) external;
     function claimBuilder(address builder, address[] calldata markets) external;
     function creditBounty(address settler, uint256 amount) external;
     function claimBounty(address settler) external;
+    /// @notice Anyone may fund. Pulls `amount` USDG from the caller into the bounty balance.
+    function fundBounty(uint256 amount) external;
+    function bountyBalance() external view returns (uint256);
     function treasury() external view returns (address);
 }

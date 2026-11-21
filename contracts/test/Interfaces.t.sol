@@ -24,6 +24,8 @@ contract InterfacesTest is Test {
         );
         assertEq(IHousePool.allocate.selector, bytes4(keccak256("allocate(address,uint256)")));
         assertEq(IFeeRouter.creditBounty.selector, bytes4(keccak256("creditBounty(address,uint256)")));
+        assertEq(IFeeRouter.fundBounty.selector, bytes4(keccak256("fundBounty(uint256)")));
+        assertEq(ILMSRMarket.pullFees.selector, bytes4(keccak256("pullFees()")));
         assertEq(
             ILMSRMarket.initialize.selector,
             bytes4(

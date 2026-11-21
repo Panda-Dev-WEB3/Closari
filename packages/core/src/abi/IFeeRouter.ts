@@ -2,6 +2,19 @@
 export const iFeeRouterAbi = [
   {
     "type": "function",
+    "name": "bountyBalance",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "claimBounty",
     "inputs": [
       {
@@ -64,6 +77,19 @@ export const iFeeRouterAbi = [
   },
   {
     "type": "function",
+    "name": "fundBounty",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "treasury",
     "inputs": [],
     "outputs": [
@@ -74,6 +100,25 @@ export const iFeeRouterAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "BountyFunded",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",

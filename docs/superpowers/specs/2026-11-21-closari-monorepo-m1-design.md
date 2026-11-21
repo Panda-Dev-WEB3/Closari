@@ -247,3 +247,8 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 - Change: NatSpec only, no ABI change. `MarketSkipped(token, dayId, index, 5)`: the UPDOWN market is not listed when `block.timestamp >= openTs`.
 - Why: final-review finding #2. An UP/DOWN market prices the move from the open; listing it after the open lets buyers trade on an already-known direction.
 - Affects: M4 keeper and indexer (new skip reason value); M2 market (UPDOWN markets always have `createdTs < openTs`).
+
+### 2026-11-21 — ILMSRMarket fee views and pullFees; IFeeRouter.fundBounty and bountyBalance
+- Change: `ILMSRMarket` adds `feeEscrow()`, `feesPaid(address)`, `feesByBuilder(address)`, `builderFeesTotal()` and `pullFees() returns (uint256 amount)` (only the router, only when `state == Resolved`; transfers `feeEscrow` to the router; a second call returns 0). NatSpec on `sweep`/`Swept`: under the pull model `sweep` does not move fees, and `Swept.feesToRouter` reports fees already pulled, which may be 0. `IFeeRouter` adds `event BountyFunded(address indexed from, uint256 amount)`, `fundBounty(uint256)` (anyone; pulls USDG from the caller into the bounty balance) and `bountyBalance()`.
+- Why: final-review finding #3. Backend §3.8 says "distribute pulls feeEscrow from a resolved market", but the frozen interfaces had no way for the router to read or pull a market's fees or builder attribution, and no way to fund the bounty balance that `creditBounty` draws on.
+- Affects: M2/M3 market (implements the views and `pullFees`), M7 router (`distribute` calls `pullFees`; implements `fundBounty`/`bountyBalance`), M4 keeper and indexer (new event). No M1 contract calls these; `MockMarket` is unchanged.
