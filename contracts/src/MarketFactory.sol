@@ -139,6 +139,8 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         if (!a.listed || !allowList.isGenuine(token)) revert AssetNotListed(token);
         IExchangeCalendar.Session memory s = calendar.session(dayId);
         if (s.closeTs == 0) revert NoSession(dayId);
+        uint32 prev = calendar.prevTradingDay(dayId, CALENDAR_LOOKBACK);
+        if (prev != 0 && block.timestamp < calendar.session(prev).closeTs) revert TooEarly(dayId);
         if (block.timestamp + HALT_BEFORE_CLOSE + NO_LISTING_BEFORE_HALT >= s.closeTs) revert TooLate(dayId);
         uint256 mult = _checkCorporateActions(token, s.closeTs);
         if (pool.maturedQueuePending()) revert QueuePending();

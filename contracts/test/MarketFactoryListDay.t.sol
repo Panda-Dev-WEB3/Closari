@@ -265,6 +265,26 @@ contract MarketFactoryListDayTest is Fixture {
         factory.listDay{value: 1}(address(nvda), FRI, u);
     }
 
+    function test_refusal_tooEarly_beforePreviousClose() public {
+        _listFri();
+        _finalClose(FRI, NVDA_PRICE, ISettlementOracle.VoidReason.NONE);
+        vm.warp(FRI_CLOSE - 1);
+        vm.prank(lister);
+        vm.expectRevert(abi.encodeWithSelector(IMarketFactory.TooEarly.selector, MON));
+        factory.listDay(address(nvda), MON, empty);
+        vm.warp(FRI_CLOSE);
+        vm.prank(lister);
+        factory.listDay(address(nvda), MON, empty);
+        assertTrue(factory.hasMarkets(MON));
+    }
+
+    function test_refusal_tooEarly_farFuture() public {
+        vm.warp(THU_OPEN - 3 hours);
+        bytes[] memory u = _updateNow(NVDA_PRICE);
+        vm.expectRevert(abi.encodeWithSelector(IMarketFactory.TooEarly.selector, TUE));
+        factory.listDay{value: 1}(address(nvda), TUE, u);
+    }
+
     function test_refusal_previousDayNotFinal() public {
         _listFri();
         vm.warp(MON_OPEN - 3 hours);

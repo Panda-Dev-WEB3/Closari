@@ -907,6 +907,17 @@ export const marketFactoryAbi = [
   },
   {
     "type": "error",
+    "name": "TooEarly",
+    "inputs": [
+      {
+        "name": "dayId",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "TooLate",
     "inputs": [
       {

@@ -41,6 +41,7 @@ interface IMarketFactory {
     error AssetNotListed(address token);
     error NoSession(uint32 dayId);
     error TooLate(uint32 dayId);
+    error TooEarly(uint32 dayId);
     error OraclePaused(address token);
     error CorporateActionPending(address token);
     error QueuePending();
@@ -61,6 +62,7 @@ interface IMarketFactory {
 
     /// @notice Permissionless. Lists all template markets for (token, dayId). Excess msg.value is refunded.
     /// Requires: !listingPaused; asset listed & genuine; session exists; now < closeTs - 600 - 3600;
+    /// now >= closeTs of the previous trading day (looked up within 10 days; no bound if none exists);
     /// not listed yet; not skipped; !oraclePaused(); no pending multiplier change with effectiveAt <= closeTs + 3600;
     /// pool has no matured unprocessed withdrawals; reference from the last final close within 3 trading days
     /// (rescaled by the current multiplier), else from refPythUpdate (publishTime within 120 s, conf/price <= 0.5%).

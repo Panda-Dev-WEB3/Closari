@@ -230,3 +230,10 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 - **Public-RPC rate limits** may throttle fork tests in CI. If so, a paid RPC URL goes into `RPC_4663`.
 - **Two unconfirmed (U) facts are checked live in M1:** that 4663 accepts Cancun, and that SBXSTK/ACME are not genuine. If either result differs from the brief, work stops and the finding is reported before the design is changed.
 - **Windows host:** Slither and Aderyn run in CI (Linux). Locally they run in Docker if needed.
+
+## Interface change log
+
+### 2026-11-21 — IMarketFactory.TooEarly(uint32 dayId)
+- Change: new error; `listDay(D)` reverts until the previous trading day's close has passed (no bound if no session exists in the prior 10 days).
+- Why: the Task 9 review found that any caller could list far-future days with a stale Pyth reference, lock the calendar early, tie up pool budget and collect bounties. The Overview intends day D to be listed right after D−1 settles.
+- Affects: M4 keeper (`listDay` job already runs after D−1 is final); M8 deploy scripts.
