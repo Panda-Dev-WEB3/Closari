@@ -10,7 +10,7 @@ Every Slither finding (Aderyn is retired upstream) at medium or above is either 
 | Slither 0.11.6 | `unused-return` (T4) | `MarketFactory._open` | False positive | `cloneDeterministic` returns the address that `predictDeterministicAddress` already computed from the same salt and was registered in `isMarket`. `initialize` is then called on that address, and a mismatch would revert. |
 | Slither 0.11.6 | `incorrect-equality` (T5) | `LMSRMarket._bookFee` | False positive | `fee == 0` only skips bookkeeping when the computed fee is zero (a tiny trade or a zero-fee config). It is a value computed in the same call from `gross` and the fee schedule, not a balance an attacker can manipulate, and both branches leave the accounting consistent. |
 | Aderyn | n/a | n/a | Not run | Aderyn has been retired upstream: the npm package, release binaries and crates.io versions are withdrawn, so it cannot be installed. `scripts/checks/check-aderyn.ts` is kept and will gate again if a report is supplied. Slither is the CI static-analysis gate. |
-| forge coverage | uncovered lines | `MarketFactory.sol` 281-282 (clone and `initialize`), `StockTokenAllowList.sol` branch at 31, `StrikeMath.sol` 32 | Accepted | Overall 98.96% lines and 98.67% branches (above the 95% bar). The MarketFactory lines run in every listing test, so their zero hits are an artifact of `--ir-minimum` line mapping, not missing tests. |
+| forge coverage | uncovered lines and branches (M2) | Lines: `LMSRMarket.sol` 470-472 (the `_discount` assembly block), `MarketFactory.sol` 283-284 (clone and `initialize`), `PriorMath.sol` 79, `StrikeMath.sol` 32. Branches: `LMSRMarket.sol` 375 and 471, `PriorMath.sol` 32 and 33 | Accepted | Overall 98.92% lines (644/651) and 97.14% branches (136/140) on 2026-11-22, with the coverage profile's fuzz seed fixed (`0x4d32`), so the figures repeat run to run. The listed lines all run in ordinary tests (every listing test, every trade, `test_stakingWithoutCode_noDiscount`); their zero hits are an artifact of `--ir-minimum` source mapping, which also hides the assembly branch at 471. Branch 375 (`TradeTooLarge` once `x/1e12` exceeds `uint128`) is a defensive guard that cannot be reached: one trade adds at most `20·b` with `b ≤ uint128`, so it would take ~1e10 trades inside the price clamp. `PriorMath` 32-33 clamp the A&S tail to [0, 1e18]; the polynomial and density keep it inside that range for every input, so the clamps are defensive. |
 
 ## Gas
 
@@ -27,8 +27,8 @@ Measured 2026-11-21.
 | Measurement | Gas | Target |
 |---|---|---|
 | `listDay` (8 real `LMSRMarket` clones, mock pool), `MarketFactoryLMSR.t.sol` `test_listDay_gas_realMarket` (`gasleft()` around `_listFri()`) | 5,592,172 | < 8,000,000 (asserted) |
-| `buy` of 10 shares, first-time buyer, cold storage (`vm.cool` on market, USDG, NVDA and pool), real USDG and NVDA on a 4663 fork, `test/fork/MarketFork.t.sol` | 261,725 | 180,000 (reported, not asserted; sanity bound 300,000 asserted) |
+| `buy` of 10 shares, first-time buyer, cold storage (`vm.cool` on market, USDG, NVDA and pool), real USDG and NVDA on a 4663 fork, `test/fork/MarketFork.t.sol` | 262,143 | 180,000 (reported, not asserted; sanity bound 300,000 asserted) |
 
 `listDay` rose from 4.04M (mock market) to 5.59M: each real clone stores its prior, edges, virtual quantities and checkpoints at `initialize`. The keeper's gas budget must cover this per token and day.
 
-Buy target missed by 81,725; CA stop = 4 cold staticcalls; decision deferred to M8 (M2 spec §13). The figure also includes the mock pool's `onMark` writes (one of them a first write to a zero slot), which the M7 pool replaces.
+Buy target missed by 82,143 (re-measured 2026-11-22 after the single-rounding fee fix, +418 gas); CA stop = 4 cold staticcalls; decision deferred to M8 (M2 spec §13). The figure also includes the mock pool's `onMark` writes (one of them a first write to a zero slot), which the M7 pool replaces.

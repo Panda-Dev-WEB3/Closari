@@ -137,7 +137,7 @@ M3 reads the checkpoints, plus the cumulative rolled forward to `t_stop`, throug
 | Interface | Change |
 |---|---|
 | `ILMSRMarket.Config` | Adds `uint256[] priorWad`, `uint16 baseFeeBps` and `uint16 rampMaxBps` |
-| `ILMSRMarket` | Adds `cumulativeAt(uint64) returns (uint256[] memory)`, `checkpoints() returns (uint64[2] memory ts, uint256[][2] memory cum)` and the custom errors of §6/§7 (`PriceOutOfBounds`, `TradeTooLarge`, `CorporateActionVisible`, `AwaitingOpen`, `LateHourCap`, `Halted`, `Expired`, `Slippage`, `WrongMarket`, `WrongToken`, `NotOracle`, `AlreadyInitialized`, `NotYetImplemented`) |
+| `ILMSRMarket` | Adds `cumulativeAt(uint64) returns (uint256[] memory)`, `checkpoints() returns (uint64[2] memory ts, uint256[][2] memory cum)` and its custom errors (§6/§7). The frozen interface declares 21 errors, all added in M2: `AlreadyInitialized`, `BadConfig`, `NotOracle`, `NotYetImplemented`, `NotTrading`, `Halted`, `Expired`, `CorporateActionVisible`, `AwaitingOpen`, `OpenAlreadySet`, `NotUpDown`, `BadOutcome`, `ZeroShares`, `TradeTooLarge`, `PriceOutOfBounds`, `LateHourCap`, `InsufficientShares`, `Slippage`, `WrongMarket`, `WrongToken` and `BadTimestamp` |
 | `IStockTokenAllowList.Asset` | Adds `uint16 volBps` |
 | `IMarketFactory` | Adds `setFees(uint16,uint16)`, `fees() returns (uint16,uint16)`, `event FeesSet(uint16,uint16)` and `error BadFees()` |
 
@@ -148,7 +148,7 @@ M3 reads the checkpoints, plus the cumulative rolled forward to `t_stop`, throug
 - `MarketFactory._open` and `_config` compute the prior (§3), the new `b`, and copy the fee snapshot.
 - `MockMarket` keeps working for the M1 tests: it accepts the new `Config`.
 - `DeployLocal.s.sol` deploys the real `LMSRMarket` implementation (with `MockUSDG`, mock pool, oracle and router, and a mock staking), seeds `volBps` and fees, lists NVDA, then makes one buy and one sell as a smoke test. The cert-server devnet is redeployed with it.
-- **Size:** `MarketFactory` stays under 24 KB (it is 18.9 KB at M1; `PriorMath` is an internal library). If it would cross 22 KB, `PriorMath` becomes a deployed library.
+- **Size:** `MarketFactory` stays under 24 KB (it is 18.9 KB at M1). `PriorMath` is a linked (deployed) library: `raw`, `floorNormalize` and `liquidity` are `public` (M1 obligation 9), so their code lives in the library, not in `MarketFactory`.
 
 ## 11. Tests (M2 acceptance)
 
