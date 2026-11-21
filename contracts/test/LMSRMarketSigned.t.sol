@@ -16,6 +16,9 @@ contract LMSRMarketSignedTest is MarketFixture {
     address owner;
     address relayer = makeAddr("relayer");
 
+    /// Permit2 `SignatureVerification.InvalidSigner()`: the recovered signer differs from `owner` (selector 0x815e1d64).
+    error InvalidSigner();
+
     function setUp() public override {
         super.setUp();
         vm.etch(PERMIT2, vm.parseBytes(vm.readFile("test/fixtures/permit2.runtime.hex")));
@@ -60,6 +63,23 @@ contract LMSRMarketSignedTest is MarketFixture {
         return vm.sign(ownerPk, keccak256(abi.encodePacked("\x19\x01", usdg.DOMAIN_SEPARATOR(), structHash)));
     }
 
+    /// The signed type strings are part of the off-chain API: pin them to literals so a silent edit fails here.
+    function test_typehashes_pinnedToLiterals() public view {
+        assertEq(
+            m.TRADE_TYPEHASH(),
+            keccak256(
+                "ClosariTrade(address market,address owner,uint8 outcome,uint256 shares,uint256 maxTotal,uint64 deadline,address builder,bytes32 salt)"
+            )
+        );
+        assertEq(
+            keccak256(bytes(m.WITNESS_TYPE_STRING())),
+            keccak256(
+                "ClosariTrade witness)ClosariTrade(address market,address owner,uint8 outcome,uint256 shares,uint256 maxTotal,uint64 deadline,address builder,bytes32 salt)TokenPermissions(address token,uint256 amount)"
+            )
+        );
+        assertEq(InvalidSigner.selector, bytes4(0x815e1d64));
+    }
+
     function test_3009_creditsOwner_refundsExcess() public {
         ILMSRMarket.TradeIntent memory t = _intent(80e6);
         (uint8 v, bytes32 r, bytes32 s) = _sign3009(t);
@@ -68,6 +88,7 @@ contract LMSRMarketSignedTest is MarketFixture {
         uint256 total = m.buyWithAuthorization(t, block.timestamp - 1, block.timestamp + 600, v, r, s);
         assertEq(m.shares(owner, 1), 100e6);
         assertEq(m.shares(relayer, 1), 0);
+        assertLt(total, t.maxTotal); // a real excess exists
         assertEq(before - usdg.balanceOf(owner), total); // excess refunded to the owner
         assertEq(m.feesByBuilder(builder), m.feeEscrow());
     }
@@ -80,7 +101,10 @@ contract LMSRMarketSignedTest is MarketFixture {
         assertFalse(usdg.authorizationState(owner, _hash(t))); // still unused
     }
 
-    /// Changing any intent field (or the market) breaks the authorisation (Backend §3.10).
+    /// Changing any intent field breaks the authorisation (Backend §3.10). The intent hash is the EIP-3009 nonce and
+    /// `maxTotal` is its value, so every tamper changes the signed digest and USDG rejects the recovered signer with
+    /// `InvalidSignature`. Swapping `owner` changes `from`: the signature recovers to the real owner, not to `from`,
+    /// so that case is `InvalidSignature` too (the nonce is unused for the new `from`, the time window is valid).
     function testFuzz_intentTamper(uint8 field, uint256 noise) public {
         ILMSRMarket.TradeIntent memory t = _intent(80e6);
         (uint8 v, bytes32 r, bytes32 s) = _sign3009(t);
@@ -94,9 +118,8 @@ contract LMSRMarketSignedTest is MarketFixture {
         else if (field == 5) t.salt = bytes32(uint256(t.salt) ^ noise);
         else t.owner = relayer;
         vm.prank(relayer);
-        vm.expectRevert();
+        vm.expectRevert(MockUSDG.InvalidSignature.selector);
         m.buyWithAuthorization(t, block.timestamp - 1, block.timestamp + 600, v, r, s);
-        assertEq(m.shares(owner, 0) + m.shares(owner, 1) + m.shares(relayer, 0) + m.shares(relayer, 1), 0);
     }
 
     function test_3009_wrongMarket() public {
@@ -152,7 +175,55 @@ contract LMSRMarketSignedTest is MarketFixture {
         vm.prank(relayer);
         uint256 total = m.buyWithPermit2(t, p, sig);
         assertEq(m.shares(owner, 1), 100e6);
+        assertEq(m.shares(relayer, 1), 0);
+        assertLt(total, t.maxTotal); // a real excess exists
         assertEq(before - usdg.balanceOf(owner), total);
+    }
+
+    /// A Slippage revert undoes Permit2's transfer and nonce use: the same signature works once the price comes back.
+    function test_permit2_slippageRevertsAtomically_sameSignatureLaterSucceeds() public {
+        vm.prank(owner);
+        usdg.approve(PERMIT2, type(uint256).max);
+        (uint256 g, uint256 f) = m.quoteBuy(1, 100e6, owner);
+        ILMSRMarket.TradeIntent memory t = _intent(g + f); // exactly the current cost
+        ISignatureTransfer.PermitTransferFrom memory p = _permit(g + f);
+        bytes memory sig = _signPermit2(t, p);
+        _buy(m, bob, 1, 50e6); // the price of outcome 1 moves up
+        uint256 before = usdg.balanceOf(owner);
+        vm.prank(relayer);
+        vm.expectRevert(ILMSRMarket.Slippage.selector);
+        m.buyWithPermit2(t, p, sig);
+        assertEq(usdg.balanceOf(owner), before);
+        _sell(m, bob, 1, 50e6); // x returns exactly to where it was
+        vm.prank(relayer);
+        uint256 total = m.buyWithPermit2(t, p, sig); // same signature, same nonce
+        assertEq(total, g + f);
+        assertEq(m.shares(owner, 1), 100e6);
+        assertEq(before - usdg.balanceOf(owner), total);
+    }
+
+    /// Permit2 moves `maxTotal` (the requested amount), never the larger signed `permitted.amount`.
+    function test_permit2_permittedAboveMaxTotal_pullsOnlyMaxTotal() public {
+        vm.prank(owner);
+        usdg.approve(PERMIT2, type(uint256).max);
+        ILMSRMarket.TradeIntent memory t = _intent(80e6);
+        ISignatureTransfer.PermitTransferFrom memory p = _permit(500e6);
+        bytes memory sig = _signPermit2(t, p);
+        uint256 before = usdg.balanceOf(owner);
+        uint256 mBefore = usdg.balanceOf(address(m));
+        vm.expectCall(address(usdg), abi.encodeCall(usdg.transferFrom, (owner, address(m), t.maxTotal)), 1);
+        vm.prank(relayer);
+        uint256 total = m.buyWithPermit2(t, p, sig);
+        assertLt(total, t.maxTotal);
+        assertEq(before - usdg.balanceOf(owner), total);
+        assertEq(usdg.balanceOf(address(m)) - mBefore, total);
+    }
+
+    function test_permit2_wrongMarket() public {
+        ILMSRMarket.TradeIntent memory t = _intent(80e6);
+        t.market = address(0xBEEF);
+        vm.expectRevert(ILMSRMarket.WrongMarket.selector);
+        m.buyWithPermit2(t, _permit(80e6), "");
     }
 
     function test_permit2_witnessTamper_andWrongToken() public {
@@ -161,8 +232,8 @@ contract LMSRMarketSignedTest is MarketFixture {
         ILMSRMarket.TradeIntent memory t = _intent(80e6);
         ISignatureTransfer.PermitTransferFrom memory p = _permit(80e6);
         bytes memory sig = _signPermit2(t, p);
-        t.shares += 1;
-        vm.expectRevert();
+        t.shares += 1; // the witness no longer matches the signed one: Permit2 recovers another signer
+        vm.expectRevert(InvalidSigner.selector);
         m.buyWithPermit2(t, p, sig);
         t.shares -= 1;
         MockUSDG other = new MockUSDG();

@@ -56,6 +56,9 @@ contract LMSRMarketPropsTest is MarketFixture {
             if (block.timestamp >= HALT) break;
         }
         emit log_named_uint("successful trades", successes);
+        // The first step is always a buy (nobody holds shares yet) of at most 2b from a prior in [0.02, 0.98], which
+        // stays inside the price clamp (p <= 0.98e^2/(0.98e^2 + 0.02) ~ 0.9973), so the campaign is never vacuous.
+        assertGt(successes, 0, "no trade succeeded");
         uint256 cash = m.cash();
         assertGe(cash, m.liability(), "I1'");
         uint256[] memory p = m.config().priorWad;
