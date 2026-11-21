@@ -309,6 +309,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
     }
 
     function _prior(Spec memory sp) internal view returns (uint256[] memory) {
+        // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
         if (sp.kind == Kind.UPDOWN) return PriorMath.uniform(2);
         return PriorMath.floorNormalize(PriorMath.raw(_days[sp.token][sp.dayId].refPrice8, sp.edges, sp.volBps));
     }

@@ -248,6 +248,7 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 6. **M2 market implementation:** block `initialize` on the implementation contract itself (its constructor marks it initialised).
 7. **Deploy ordering:** the pool, oracle and router take the nonce-predicted factory address, and the factory deploys last (§4.2). The M8 script deploys and initialises the Timelock atomically, with a 48 h delay.
 8. **Gas:** `listDay` measured 4.04M with mock markets (`security/triage.md`). Re-measure with the real `LMSRMarket` in M2 for the keeper's gas budget.
+9. **M8 deploy:** `PriorMath` is a linked library (`raw`, `floorNormalize`, `liquidity` are public, to keep `MarketFactory` under 22 KB). The mainnet script must deploy it and link it into `MarketFactory`; `forge script` runs need `--sender`.
 
 ## Open decisions before M2/M7
 
