@@ -36,7 +36,32 @@ contract LMSRMathTest is Test {
         x[0] = 100e6 * 1e12;
         uint256 back = LMSRMath.sellProceeds(x, BW, 0, 100e6);
         assertGt(cost, back);
+        assertGe(cost - back, 2);
         assertLe(cost - back, 3);
+    }
+
+    function test_zeroShares_marginsOnly() public pure {
+        uint256[] memory x = _x(3);
+        assertEq(LMSRMath.buyCost(x, BW, 0, 0), 1);
+        x[0] = 5e18;
+        assertEq(LMSRMath.sellProceeds(x, BW, 0, 0), 0);
+    }
+
+    function test_sellTiny_returnsZero() public pure {
+        uint256[] memory x = _x(2);
+        x[0] = 1e12;
+        assertEq(LMSRMath.sellProceeds(x, BW, 0, 1), 0);
+    }
+
+    function test_farBelowMax_termSkipped() public pure {
+        uint256[] memory x = _x(3);
+        x[0] = 50 * BW; // others are > 42 b below the max
+        uint256 c = LMSRMath.cost(x, BW);
+        assertApproxEqAbs(c, x[0], 1e12);
+        uint256[] memory p = LMSRMath.prices(x, BW);
+        assertEq(p[1], 0);
+        assertEq(p[2], 0);
+        assertEq(p[0], 1e18);
     }
 
     function test_inputsUnchanged() public pure {
