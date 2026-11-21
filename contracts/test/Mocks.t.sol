@@ -15,17 +15,14 @@ contract MocksTest is Test {
         assertTrue(address(a).codehash != address(c).codehash);
     }
 
-    function test_pool_refusesSelectedCall() public {
+    function test_pool_refusesSelectedMarket() public {
         MockHousePool p = new MockHousePool();
-        p.setRefuseCall(1, true);
+        p.setRefuseMarket(address(2), true);
         p.allocate(address(1), 10);
         vm.expectRevert(MockHousePool.Refused.selector);
         p.allocate(address(2), 10);
-        // A refused call reverts its own allocateCalls++, so the next call reuses index 1. Clear the refusal first.
-        p.setRefuseCall(1, false);
         p.allocate(address(3), 10);
         assertEq(p.allocated(address(1)), 10);
-        assertEq(p.allocated(address(2)), 0);
         assertEq(p.allocated(address(3)), 10);
     }
 

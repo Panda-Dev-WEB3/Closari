@@ -8,7 +8,7 @@ contract MockHousePool {
     bool public burnGas;
     bool public maturedQueuePending;
     uint256 public allocateCalls;
-    mapping(uint256 => bool) public refuseCall;
+    mapping(address => bool) public refuseMarket;
     mapping(address => uint256) public allocated;
 
     function setRefuseAll(bool v) external {
@@ -19,8 +19,8 @@ contract MockHousePool {
         burnGas = v;
     }
 
-    function setRefuseCall(uint256 callIndex, bool v) external {
-        refuseCall[callIndex] = v;
+    function setRefuseMarket(address market, bool v) external {
+        refuseMarket[market] = v;
     }
 
     function setMaturedQueuePending(bool v) external {
@@ -28,13 +28,13 @@ contract MockHousePool {
     }
 
     function allocate(address market, uint256 budget) external {
-        uint256 i = allocateCalls++;
+        ++allocateCalls;
         if (burnGas) {
             while (true) {
                 allocateCalls = allocateCalls + 1; // runs out of gas → empty revert data
             }
         }
-        if (refuseAll || refuseCall[i]) revert Refused();
+        if (refuseAll || refuseMarket[market]) revert Refused();
         allocated[market] = budget;
     }
 }
