@@ -115,6 +115,7 @@ abstract contract Fixture is Test {
                 budgetAbove: budget,
                 budgetRange: budget,
                 budgetUpDown: budget,
+                volBps: 300,
                 listed: listed
             })
         );

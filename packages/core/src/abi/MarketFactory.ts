@@ -157,6 +157,24 @@ export const marketFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "fees",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "baseFeeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "rampMaxBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "guardian",
     "inputs": [],
     "outputs": [
@@ -423,6 +441,24 @@ export const marketFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "setFees",
+    "inputs": [
+      {
+        "name": "baseFeeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "rampMaxBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setListingBounty",
     "inputs": [
       {
@@ -575,6 +611,25 @@ export const marketFactoryAbi = [
         "type": "address[]",
         "indexed": false,
         "internalType": "address[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeesSet",
+    "inputs": [
+      {
+        "name": "baseFeeBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "rampMaxBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
       }
     ],
     "anonymous": false
@@ -740,6 +795,11 @@ export const marketFactoryAbi = [
   {
     "type": "error",
     "name": "BadBps",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadFees",
     "inputs": []
   },
   {

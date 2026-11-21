@@ -24,6 +24,7 @@ M2 delivers `LMSRMarket`, the clone implementation that `MarketFactory` opens ei
 | Loss bound | Worst-case loss ≤ budget is kept. `b = budget / ln(1 / p0_min)`, so far strikes get less depth per budget dollar |
 | Prior floor | `PRIOR_MIN = 0.02` (code constant). No outcome opens below 2% or above 98%, so `b ≥ budget / ln 50 ≈ 0.256 · budget` |
 | Fee parameters | Snapshotted into `Config` at listing (`baseFeeBps`, `rampMaxBps`), set on the factory by the timelock, with hard caps `base ≤ 200` and `rampMax ≤ 500` in code |
+| B_MIN | 100 shares (was 1,000), so far strikes at launch budgets still list |
 | Settlement functions | Present in the ABI, revert `NotYetImplemented()` until M3 |
 | Shared constants | `src/lib/Constants.sol` holds `CA_AFTER`, `HALT_BEFORE_CLOSE`, `P_MIN`, `PRIOR_MIN` and `VOID_TWAP_WINDOW`. The factory switches to it (obligation 5) |
 | Implementation lock | The `LMSRMarket` constructor marks the implementation initialised (obligation 6) |
@@ -136,7 +137,7 @@ M3 reads the checkpoints, plus the cumulative rolled forward to `t_stop`, throug
 | Interface | Change |
 |---|---|
 | `ILMSRMarket.Config` | Adds `uint256[] priorWad`, `uint16 baseFeeBps` and `uint16 rampMaxBps` |
-| `ILMSRMarket` | Adds `cumulativeAt(uint64) returns (uint256[] memory)`, `checkpoints() returns (uint64[2] memory ts, uint256[][2] memory cum)` and the custom errors of §6/§7 (`PriceOutOfBounds`, `TradeTooLarge`, `CorporateActionVisible`, `AwaitingOpen`, `LateHourCap`, `Halted`, `Expired`, `Slippage`, `WrongMarket`, `WrongToken`, `NotOracle`, `NotFactory`, `AlreadyInitialized`, `NotYetImplemented`) |
+| `ILMSRMarket` | Adds `cumulativeAt(uint64) returns (uint256[] memory)`, `checkpoints() returns (uint64[2] memory ts, uint256[][2] memory cum)` and the custom errors of §6/§7 (`PriceOutOfBounds`, `TradeTooLarge`, `CorporateActionVisible`, `AwaitingOpen`, `LateHourCap`, `Halted`, `Expired`, `Slippage`, `WrongMarket`, `WrongToken`, `NotOracle`, `AlreadyInitialized`, `NotYetImplemented`) |
 | `IStockTokenAllowList.Asset` | Adds `uint16 volBps` |
 | `IMarketFactory` | Adds `setFees(uint16,uint16)`, `fees() returns (uint16,uint16)`, `event FeesSet(uint16,uint16)` and `error BadFees()` |
 

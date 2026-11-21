@@ -10,6 +10,7 @@ interface IStockTokenAllowList {
         uint96 budgetAbove; // per-market budget, USDG base units
         uint96 budgetRange;
         uint96 budgetUpDown;
+        uint16 volBps; // close-to-close daily volatility, bps (M2 spec §3)
         bool listed;
     }
 
@@ -22,7 +23,7 @@ interface IStockTokenAllowList {
 
     /// @dev token.codehash == PROXY_CODEHASH (the 283-byte proxy embeds the beacon) and the beacon has an implementation.
     function isGenuine(address token) external view returns (bool);
-    /// @notice onlyTimelock; reverts unless isGenuine(token), pythId != 0, tickPrice8 != 0 and clFeed.decimals() == 8.
+    /// @notice onlyTimelock; reverts unless isGenuine(token), pythId != 0, tickPrice8 != 0, clFeed.decimals() == 8 and, when listed, volBps ∈ [25, 2000].
     function setAsset(address token, Asset calldata a) external;
     function asset(address token) external view returns (Asset memory);
 }

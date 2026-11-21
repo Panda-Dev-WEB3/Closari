@@ -32,6 +32,7 @@ interface IMarketFactory {
     event SkipSet(address indexed token, uint32 indexed dayId, bool skip);
     event TemplateSet(int16[] strikeBps, int16[] edgeBps, bool upDown);
     event ListingBountySet(uint96 amount);
+    event FeesSet(uint16 baseFeeBps, uint16 rampMaxBps);
     event GuardianVoided(address indexed market, bytes32 reasonHash);
 
     error NotTimelock();
@@ -55,6 +56,7 @@ interface IMarketFactory {
     error BadTemplate();
     error LengthMismatch();
     error BountyTooHigh();
+    error BadFees();
     error UnknownMarket(address market);
     error PastHalt(address market);
     /// @dev The pool reverted with empty data (out of gas or a bare revert). Listing reverts instead of skipping,
@@ -85,6 +87,9 @@ interface IMarketFactory {
 
     /// @notice onlyTimelock. Strictly increasing bps in (-10_000, 10_000). Max 8 ABOVE strikes, max 7 edges (8 buckets).
     function setTemplate(int16[] calldata strikeBps, int16[] calldata edgeBps, bool upDown) external;
+    /// @notice onlyTimelock. Fee parameters copied into each market's Config at listing. base ≤ 200, rampMax ≤ 500 bps.
+    function setFees(uint16 baseFeeBps, uint16 rampMaxBps) external;
+    function fees() external view returns (uint16 baseFeeBps, uint16 rampMaxBps);
     /// @notice onlyTimelock. Capped at 5 USDG.
     function setListingBounty(uint96 amount) external;
     /// @notice onlyGuardian. Stops NEW listings only.

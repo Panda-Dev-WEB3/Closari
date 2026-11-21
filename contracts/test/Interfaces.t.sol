@@ -12,11 +12,12 @@ import {Test} from "forge-std/Test.sol";
 
 contract InterfacesTest is Test {
     function test_selectorsMatchBrief() public pure {
+        assertEq(IMarketFactory.setFees.selector, bytes4(keccak256("setFees(uint16,uint16)")));
         assertEq(IMarketFactory.listDay.selector, bytes4(keccak256("listDay(address,uint32,bytes[])")));
         assertEq(IExchangeCalendar.setSessions.selector, bytes4(keccak256("setSessions(uint32[],(uint64,uint64)[])")));
         assertEq(
             IStockTokenAllowList.setAsset.selector,
-            bytes4(keccak256("setAsset(address,(bytes32,address,uint32,uint96,uint96,uint96,bool))"))
+            bytes4(keccak256("setAsset(address,(bytes32,address,uint32,uint96,uint96,uint96,uint16,bool))"))
         );
         assertEq(
             ISettlementOracle.submitClose.selector,
@@ -30,7 +31,7 @@ contract InterfacesTest is Test {
             ILMSRMarket.initialize.selector,
             bytes4(
                 keccak256(
-                    "initialize((address,uint32,uint8,uint8,int64[],uint64,uint64,uint64,uint64,uint256,uint256,uint96),address,address,address,address)"
+                    "initialize((address,uint32,uint8,uint8,int64[],uint64,uint64,uint64,uint64,uint256,uint256,uint96,uint256[],uint16,uint16),address,address,address,address)"
                 )
             )
         );

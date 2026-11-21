@@ -28,6 +28,9 @@ contract MockMarket {
     uint256 internal _multiplierSnapshot;
     uint256 internal _bWad;
     uint96 internal _budget;
+    uint256[] internal _priorWad;
+    uint16 internal _baseFeeBps;
+    uint16 internal _rampMaxBps;
 
     function initialize(
         ILMSRMarket.Config calldata c,
@@ -53,6 +56,11 @@ contract MockMarket {
         _multiplierSnapshot = c.multiplierSnapshot;
         _bWad = c.bWad;
         _budget = c.budget;
+        for (uint256 i; i < c.priorWad.length; ++i) {
+            _priorWad.push(c.priorWad[i]);
+        }
+        _baseFeeBps = c.baseFeeBps;
+        _rampMaxBps = c.rampMaxBps;
     }
 
     function config() external view returns (ILMSRMarket.Config memory c) {
@@ -68,6 +76,9 @@ contract MockMarket {
         c.multiplierSnapshot = _multiplierSnapshot;
         c.bWad = _bWad;
         c.budget = _budget;
+        c.priorWad = _priorWad;
+        c.baseFeeBps = _baseFeeBps;
+        c.rampMaxBps = _rampMaxBps;
     }
 
     function voidMarket(uint8 reason) external {

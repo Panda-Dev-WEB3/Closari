@@ -171,6 +171,7 @@ contract DeployLocal is Script {
             budgetAbove: 2_000e6,
             budgetRange: 2_000e6,
             budgetUpDown: 2_000e6,
+            volBps: 300,
             listed: true
         });
         _viaTimelock(

@@ -1,8 +1,8 @@
 {
   "IExchangeCalendar": "4e04729403514daff98b10698aa76a5f1fc24985087268914e8276c001540fdf",
-  "IStockTokenAllowList": "dbd53c505dcd487d0e41990b6198c1316d92878d4b792b34ec06240e83f19691",
-  "IMarketFactory": "ae613b34a5b5ef64281c9eaee16c42af6b0c0ca87aff4f8eefd99a1b1a51667b",
-  "ILMSRMarket": "4986a2c9a64d4a384e1d80fa722bb2925165d3db89cd7415fac5c9d764bc71f2",
+  "IStockTokenAllowList": "911abee9ce05d60f6c92c11001286ad95980903e9df461cfebb518883a85513e",
+  "IMarketFactory": "b3fcfb094835f19f6de1a1a9c9b5190442fb7da48036899a806252a629ea16d7",
+  "ILMSRMarket": "c334d3bae0e6f5d3624ca0a79faee4cb3706ea482121cbeda25fdb852e4a43c3",
   "ISettlementOracle": "4aae4891842b255145a55e4b6846e098e5e686cd5ae14a1e5c01e70d18c0e38e",
   "IHousePool": "bb9c96a56c3bdb3d5c8f45be08ab082989fd4f68595dd4cb05f301a073b0fff7",
   "IFeeRouter": "7b17035e5fcadee5cdbb408d6932963aea926a3a7cf91db45fc77c72af704fc0",

@@ -36,6 +36,7 @@ contract StockTokenAllowListTest is Test {
             budgetAbove: 2_000e6,
             budgetRange: 2_000e6,
             budgetUpDown: 2_000e6,
+            volBps: 300,
             listed: true
         });
     }
@@ -104,6 +105,27 @@ contract StockTokenAllowListTest is Test {
         vm.prank(timelock);
         vm.expectRevert(abi.encodeWithSelector(IStockTokenAllowList.BadFeedDecimals.selector, uint8(18)));
         list.setAsset(address(nvda), _asset(address(feed18)));
+    }
+
+    function test_setAsset_volBpsBounds() public {
+        IStockTokenAllowList.Asset memory a = _asset(address(feed8));
+        a.volBps = 24;
+        vm.prank(timelock);
+        vm.expectRevert(IStockTokenAllowList.BadAsset.selector);
+        list.setAsset(address(nvda), a);
+        a.volBps = 2_001;
+        vm.prank(timelock);
+        vm.expectRevert(IStockTokenAllowList.BadAsset.selector);
+        list.setAsset(address(nvda), a);
+        a.listed = false; // an unlisted asset may carry volBps 0
+        a.volBps = 0;
+        vm.prank(timelock);
+        list.setAsset(address(nvda), a);
+        a.listed = true;
+        a.volBps = 2_000;
+        vm.prank(timelock);
+        list.setAsset(address(nvda), a);
+        assertEq(list.asset(address(nvda)).volBps, 2_000);
     }
 
     function test_setAsset_rejectsCodelessFeed() public {

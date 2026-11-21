@@ -253,6 +253,24 @@ export const iLMSRMarketAbi = [
   },
   {
     "type": "function",
+    "name": "checkpoints",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "ts",
+        "type": "uint64[2]",
+        "internalType": "uint64[2]"
+      },
+      {
+        "name": "cum",
+        "type": "uint256[][2]",
+        "internalType": "uint256[][2]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "claim",
     "inputs": [
       {
@@ -352,8 +370,42 @@ export const iLMSRMarketAbi = [
             "name": "budget",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "priorWad",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "baseFeeBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "rampMaxBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cumulativeAt",
+    "inputs": [
+      {
+        "name": "ts",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cum",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
       }
     ],
     "stateMutability": "view"
@@ -477,6 +529,21 @@ export const iLMSRMarketAbi = [
             "name": "budget",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "priorWad",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "baseFeeBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "rampMaxBps",
+            "type": "uint16",
+            "internalType": "uint16"
           }
         ]
       },
@@ -892,5 +959,110 @@ export const iLMSRMarketAbi = [
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyInitialized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AwaitingOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadConfig",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadOutcome",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadTimestamp",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CorporateActionVisible",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Expired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Halted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientShares",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LateHourCap",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotOracle",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotTrading",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotUpDown",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotYetImplemented",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OpenAlreadySet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PriceOutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Slippage",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TradeTooLarge",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongMarket",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongToken",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroShares",
+    "inputs": []
   }
 ] as const;

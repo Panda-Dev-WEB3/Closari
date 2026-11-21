@@ -2,6 +2,7 @@
   "tickers": ["NVDA", "TSLA", "SPY", "QQQ", "AAPL", "META", "AMZN", "MSFT", "GOOGL", "AMD", "PLTR", "MU"],
   "tickPrice8": 50000000,
   "budget": 2000000000,
+  "volBps": { "NVDA": 300, "TSLA": 380, "SPY": 100, "QQQ": 125, "AAPL": 160, "META": 220, "AMZN": 190, "MSFT": 140, "GOOGL": 175, "AMD": 320, "PLTR": 410, "MU": 320, "SOXX": 220 },
   "assets": {
     "NVDA": { "token": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec", "clFeed": "0x379EC4f7C378F34a1B47E4F3cbeBCbAC3E8E9F15", "pythId": null },
     "TSLA": { "token": "0x322f0929c4625ed5bad873c95208d54e1c003b2d", "clFeed": "0x4A1166a659A55625345e9515b32adECea5547C38", "pythId": null },

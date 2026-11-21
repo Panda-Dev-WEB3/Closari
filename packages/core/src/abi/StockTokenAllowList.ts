@@ -94,6 +94,11 @@ export const stockTokenAllowListAbi = [
             "internalType": "uint96"
           },
           {
+            "name": "volBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
             "name": "listed",
             "type": "bool",
             "internalType": "bool"
@@ -167,6 +172,11 @@ export const stockTokenAllowListAbi = [
             "internalType": "uint96"
           },
           {
+            "name": "volBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
             "name": "listed",
             "type": "bool",
             "internalType": "bool"
@@ -235,6 +245,11 @@ export const stockTokenAllowListAbi = [
             "name": "budgetUpDown",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "volBps",
+            "type": "uint16",
+            "internalType": "uint16"
           },
           {
             "name": "listed",

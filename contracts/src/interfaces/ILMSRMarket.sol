@@ -12,6 +12,28 @@ interface ILMSRMarket {
         Voided
     }
 
+    error AlreadyInitialized();
+    error BadConfig();
+    error NotOracle();
+    error NotYetImplemented();
+    error NotTrading();
+    error Halted();
+    error Expired();
+    error CorporateActionVisible();
+    error AwaitingOpen();
+    error OpenAlreadySet();
+    error NotUpDown();
+    error BadOutcome();
+    error ZeroShares();
+    error TradeTooLarge();
+    error PriceOutOfBounds();
+    error LateHourCap();
+    error InsufficientShares();
+    error Slippage();
+    error WrongMarket();
+    error WrongToken();
+    error BadTimestamp();
+
     struct Config {
         address token;
         uint32 dayId;
@@ -25,6 +47,9 @@ interface ILMSRMarket {
         uint256 multiplierSnapshot;
         uint256 bWad;
         uint96 budget;
+        uint256[] priorWad; // opening prices, Σ = 1e18, each ≥ Constants.PRIOR_MIN (M2 spec §3)
+        uint16 baseFeeBps; // snapshotted from the factory at listing
+        uint16 rampMaxBps;
     }
 
     struct TradeIntent {
@@ -110,4 +135,10 @@ interface ILMSRMarket {
     function shares(address account, uint8 outcome) external view returns (uint256);
     function liability() external view returns (uint256);
     function cash() external view returns (uint256);
+    /// @notice Cumulative floored price × seconds per outcome at `ts` (≥ the last trade time), n entries. The last
+    ///         entry is implied: (ts − createdTs) × 1e18 − Σ others. Prices are constant between trades, so it is exact.
+    function cumulativeAt(uint64 ts) external view returns (uint256[] memory cum);
+    /// @notice Void-TWAP checkpoints. ts[0] = max(haltTs − 3600, createdTs); ts[1] = max(openTs − 3600, createdTs) for
+    ///         UPDOWN, 0 otherwise. cum[j] has n entries (as cumulativeAt) and is empty when ts[j] == 0.
+    function checkpoints() external view returns (uint64[2] memory ts, uint256[][2] memory cum);
 }

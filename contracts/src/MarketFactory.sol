@@ -9,6 +9,7 @@ import {IMarketFactory} from "./interfaces/IMarketFactory.sol";
 import {ISettlementOracle} from "./interfaces/ISettlementOracle.sol";
 import {IStockTokenAllowList} from "./interfaces/IStockTokenAllowList.sol";
 import {IStockToken} from "./interfaces/external/IStockToken.sol";
+import {Constants} from "./lib/Constants.sol";
 import {PriceMath} from "./lib/PriceMath.sol";
 import {StrikeMath} from "./lib/StrikeMath.sol";
 import {IPyth} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
@@ -46,17 +47,13 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
 
     error ZeroAddress();
 
-    uint64 internal constant HALT_BEFORE_CLOSE = 600;
     uint64 internal constant NO_LISTING_BEFORE_HALT = 3_600;
-    uint64 internal constant CA_AFTER = 3_600;
     uint32 internal constant CALENDAR_LOOKBACK = 10;
     uint256 internal constant REF_TRADING_DAYS = 3;
     uint64 internal constant REF_MAX_AGE = 120;
     uint256 internal constant REF_CONF_MAX_BPS = 50;
     uint256 internal constant MAX_STRIKES = 8;
     uint256 internal constant MAX_EDGES = 7;
-    uint256 internal constant B_MIN = 1e9; // 1e3 shares in base units
-    uint256 internal constant B_MAX = 1e12; // 1e6 shares in base units
     uint96 internal constant MAX_LISTING_BOUNTY = 5e6;
     uint96 internal constant LAUNCH_LISTING_BOUNTY = 1e6;
 
@@ -79,6 +76,8 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
 
     bool public listingPaused;
     uint96 public listingBounty;
+    uint16 internal _baseFeeBps;
+    uint16 internal _rampMaxBps;
     bool internal _upDown;
     int16[] internal _strikeBps;
     int16[] internal _edgeBps;
@@ -122,6 +121,9 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         _setTemplate(s, e, true);
         listingBounty = LAUNCH_LISTING_BOUNTY;
         emit ListingBountySet(LAUNCH_LISTING_BOUNTY);
+        _baseFeeBps = 50;
+        _rampMaxBps = 250;
+        emit FeesSet(50, 250);
     }
 
     // ------------------------------------------------------------------ listing
@@ -143,7 +145,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         if (s.closeTs == 0) revert NoSession(dayId);
         uint32 prev = calendar.prevTradingDay(dayId, CALENDAR_LOOKBACK);
         if (prev != 0 && block.timestamp < calendar.session(prev).closeTs) revert TooEarly(dayId);
-        if (block.timestamp + HALT_BEFORE_CLOSE + NO_LISTING_BEFORE_HALT >= s.closeTs) revert TooLate(dayId);
+        if (block.timestamp + Constants.HALT_BEFORE_CLOSE + NO_LISTING_BEFORE_HALT >= s.closeTs) revert TooLate(dayId);
         uint256 mult = _checkCorporateActions(token, s.closeTs);
         if (pool.maturedQueuePending()) revert QueuePending();
         (int256 ref8, uint256 fee) = _reference(token, dayId, a.pythId, mult, refPythUpdate);
@@ -169,7 +171,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         IStockToken t = IStockToken(token);
         if (t.oraclePaused()) revert OraclePaused(token);
         mult = t.uiMultiplier();
-        if (t.newUIMultiplier() != mult && t.effectiveAt() <= closeTs + CA_AFTER) {
+        if (t.newUIMultiplier() != mult && t.effectiveAt() <= closeTs + Constants.CA_AFTER) {
             revert CorporateActionPending(token);
         }
     }
@@ -291,11 +293,23 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         c.edges = sp.edges;
         c.createdTs = day.createdTs;
         c.openTs = day.openTs;
-        c.haltTs = day.closeTs - HALT_BEFORE_CLOSE;
+        c.haltTs = day.closeTs - Constants.HALT_BEFORE_CLOSE;
         c.closeTs = day.closeTs;
         c.multiplierSnapshot = day.multiplierSnapshot;
         c.bWad = bWad;
         c.budget = sp.budget;
+        c.priorWad = _uniformPrior(n);
+        c.baseFeeBps = _baseFeeBps;
+        c.rampMaxBps = _rampMaxBps;
+    }
+
+    /// @dev Temporary uniform opening prices (Σ = 1e18); the dust goes to outcome 0.
+    function _uniformPrior(uint8 n) internal pure returns (uint256[] memory p) {
+        p = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            p[i] = 1e18 / n;
+        }
+        p[0] += 1e18 - (1e18 / n) * n;
     }
 
     /// @dev b = floor(budget × 1e18 / (lnWad(n) + 1)) base units, so b·ln n ≤ budget; returned in WAD (× 1e12).
@@ -303,7 +317,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         uint256 lnN = uint256(FixedPointMathLib.lnWad(int256(uint256(n) * 1e18)));
         // slither-disable-next-line divide-before-multiply -- triaged, security/triage.md T2
         uint256 b = uint256(budget) * 1e18 / (lnN + 1);
-        if (b < B_MIN || b > B_MAX) return 0;
+        if (b < Constants.B_MIN || b > Constants.B_MAX) return 0;
         return b * 1e12;
     }
 
@@ -343,6 +357,16 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         if (amount > MAX_LISTING_BOUNTY) revert BountyTooHigh();
         listingBounty = amount;
         emit ListingBountySet(amount);
+    }
+
+    function setFees(uint16 baseFeeBps, uint16 rampMaxBps) external onlyTimelock {
+        if (baseFeeBps > Constants.MAX_BASE_FEE_BPS || rampMaxBps > Constants.MAX_RAMP_BPS) revert BadFees();
+        (_baseFeeBps, _rampMaxBps) = (baseFeeBps, rampMaxBps);
+        emit FeesSet(baseFeeBps, rampMaxBps);
+    }
+
+    function fees() external view returns (uint16 baseFeeBps, uint16 rampMaxBps) {
+        return (_baseFeeBps, _rampMaxBps);
     }
 
     function setListingPaused(bool paused) external onlyGuardian {
