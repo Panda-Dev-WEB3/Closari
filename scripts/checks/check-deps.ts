@@ -14,7 +14,8 @@ const errors: string[] = [];
 for (const [path, { commit }] of Object.entries(lock.submodules)) {
   const out = Bun.spawnSync(["git", "-C", ROOT, "ls-tree", "HEAD", path]).stdout.toString().trim();
   const actual = out.split(/\s+/)[2];
-  if (actual !== commit) errors.push(`submodule ${path}: tree has ${actual ?? "nothing"}, lock has ${commit}`);
+  if (actual !== commit)
+    errors.push(`submodule ${path}: tree has ${actual ?? "nothing"}, lock has ${commit}`);
 }
 
 for (const [path, { sha256 }] of Object.entries(lock.vendored)) {
@@ -27,9 +28,13 @@ for (const [path, { sha256 }] of Object.entries(lock.vendored)) {
 const contractsPkg = JSON.parse(readFileSync(join(ROOT, "contracts", "package.json"), "utf8"));
 for (const [name, version] of Object.entries(lock.npm)) {
   const declared = contractsPkg.devDependencies?.[name];
-  if (declared !== version) errors.push(`npm ${name}: contracts/package.json has ${declared}, lock has ${version}`);
-  const installed = JSON.parse(readFileSync(join(ROOT, "node_modules", name, "package.json"), "utf8")).version;
-  if (installed !== version) errors.push(`npm ${name}: installed ${installed}, lock has ${version}`);
+  if (declared !== version)
+    errors.push(`npm ${name}: contracts/package.json has ${declared}, lock has ${version}`);
+  const installed = JSON.parse(
+    readFileSync(join(ROOT, "node_modules", name, "package.json"), "utf8"),
+  ).version;
+  if (installed !== version)
+    errors.push(`npm ${name}: installed ${installed}, lock has ${version}`);
 }
 
 if (errors.length) {

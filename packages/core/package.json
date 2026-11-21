@@ -1,0 +1,21 @@
+{
+  "name": "@closari/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "abi:write": "bun run scripts/abi.ts write",
+    "abi:check": "bun run scripts/abi.ts check",
+    "abi:freeze": "bun run scripts/abi.ts freeze",
+    "vectors": "bun run scripts/gen-vectors.ts",
+    "scan": "bun run scripts/scan-tokens.ts",
+    "probe": "bun run scripts/chain-probe.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "viem": "2.58.4"
+  }
+}
