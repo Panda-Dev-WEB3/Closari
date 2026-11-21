@@ -45,6 +45,7 @@ jobs:
       - run: forge build --sizes
         working-directory: contracts
       - run: bun run contracts:test
+      - run: bun run --cwd contracts test:ffi
       - run: bun run --cwd contracts snapshot:check
       - run: bun run --cwd contracts coverage && bun run scripts/checks/check-coverage.ts contracts/lcov.info
 

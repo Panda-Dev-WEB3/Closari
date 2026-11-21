@@ -4,13 +4,14 @@
   "version": "0.0.0",
   "scripts": {
     "build": "forge build --sizes",
-    "test": "forge test --no-match-path 'test/fork/*'",
+    "test": "forge test --no-match-path 'test/{fork,ffi}/*'",
+    "test:ffi": "FOUNDRY_PROFILE=ffi forge test --match-path 'test/ffi/*'",
     "test:fork": "forge test --match-path 'test/fork/*' -vv",
     "fmt": "forge fmt",
     "fmt:check": "forge fmt --check",
-    "snapshot": "forge snapshot --no-match-path 'test/fork/*' --no-match-test 'testFuzz|invariant'",
-    "snapshot:check": "forge snapshot --check --tolerance 5 --no-match-path 'test/fork/*' --no-match-test 'testFuzz|invariant'",
-    "coverage": "forge coverage --ir-minimum --report lcov --no-match-path 'test/fork/*' --no-match-coverage '(test|script|vendor)/'"
+    "snapshot": "forge snapshot --no-match-path 'test/{fork,ffi}/*' --no-match-test 'testFuzz|invariant'",
+    "snapshot:check": "forge snapshot --check --tolerance 5 --no-match-path 'test/{fork,ffi}/*' --no-match-test 'testFuzz|invariant'",
+    "coverage": "forge coverage --ir-minimum --report lcov --no-match-path 'test/{fork,ffi}/*' --no-match-coverage '(test|script|vendor)/'"
   },
   "devDependencies": {
     "@pythnetwork/pyth-sdk-solidity": "4.3.1",

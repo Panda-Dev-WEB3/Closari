@@ -14,6 +14,7 @@ fs_permissions = [
   { access = "read", path = "./test/vectors" },
   { access = "read", path = "./deployments" },
   { access = "read", path = "./config" },
+  { access = "read", path = "./test/fixtures" },
 ]
 
 [profile.default.fuzz]
@@ -25,6 +26,12 @@ depth = 200
 
 [profile.lite.fuzz]
 runs = 256
+
+[profile.ffi]
+ffi = true
+
+[profile.ffi.fuzz]
+runs = 512
 
 [profile.nightly.invariant]
 runs = 50000
