@@ -5,6 +5,7 @@ import {LMSRMarket} from "../src/LMSRMarket.sol";
 import {IMarketFactory} from "../src/interfaces/IMarketFactory.sol";
 import {Constants} from "../src/lib/Constants.sol";
 import {PriorMath} from "../src/lib/PriorMath.sol";
+import {isExpectedTradeRevert} from "./utils/ExpectedReverts.sol";
 import {MarketFixture} from "./utils/MarketFixture.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
@@ -29,6 +30,7 @@ contract LMSRMarketPropsTest is MarketFixture {
         uint256 b = m.config().bWad / 1e12;
         address[3] memory who = [alice, bob, carol];
         uint256 steps = bound(stepsRaw, 1, 40);
+        uint256 successes;
         for (uint256 s; s < steps; ++s) {
             uint256 r = uint256(keccak256(abi.encode(seed, s)));
             address a = who[r % 3];
@@ -37,14 +39,23 @@ contract LMSRMarketPropsTest is MarketFixture {
             if ((r >> 200) % 3 == 0 && m.shares(a, k) > 0) {
                 sh = bound(sh, 1, m.shares(a, k));
                 vm.prank(a);
-                try m.sell(k, sh, 0, type(uint64).max, address(0)) {} catch {}
+                try m.sell(k, sh, 0, type(uint64).max, address(0)) {
+                    ++successes;
+                } catch (bytes memory err) {
+                    assertTrue(isExpectedTradeRevert(err), "unexpected sell revert (panic?)");
+                }
             } else {
                 vm.prank(a);
-                try m.buy(k, sh, type(uint256).max, type(uint64).max, address(0)) {} catch {}
+                try m.buy(k, sh, type(uint256).max, type(uint64).max, address(0)) {
+                    ++successes;
+                } catch (bytes memory err) {
+                    assertTrue(isExpectedTradeRevert(err), "unexpected buy revert (panic?)");
+                }
             }
             vm.warp(block.timestamp + bound(r >> 100, 0, 600));
             if (block.timestamp >= HALT) break;
         }
+        emit log_named_uint("successful trades", successes);
         uint256 cash = m.cash();
         assertGe(cash, m.liability(), "I1'");
         uint256[] memory p = m.config().priorWad;

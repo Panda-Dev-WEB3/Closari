@@ -6,6 +6,7 @@ import {IMarketFactory} from "../src/interfaces/IMarketFactory.sol";
 import {Constants} from "../src/lib/Constants.sol";
 import {MockStockToken} from "./mocks/MockStockToken.sol";
 import {MockUSDG} from "./mocks/MockUSDG.sol";
+import {isExpectedTradeRevert} from "./utils/ExpectedReverts.sol";
 import {MarketFixture} from "./utils/MarketFixture.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -16,6 +17,10 @@ contract MarketHandler is Test {
     address[8] internal actors;
     uint64 public halt;
     bool public tradedAtOrAfterHalt;
+    bool public unexpectedRevert;
+    uint256 public buys;
+    uint256 public sells;
+    uint256 public calls;
 
     constructor(LMSRMarket m_, MockUSDG usdg_, MockStockToken token_, uint64 halt_) {
         (m, usdg, token, halt) = (m_, usdg_, token_, halt_);
@@ -28,33 +33,47 @@ contract MarketHandler is Test {
     }
 
     function buy(uint256 a, uint8 k, uint256 sh) external {
+        ++calls;
         address who = actors[a % 8];
         k = uint8(bound(k, 0, m.config().n - 1));
         sh = bound(sh, 1, 2 * (m.config().bWad / 1e12));
         vm.prank(who);
         try m.buy(k, sh, type(uint256).max, type(uint64).max, address(0)) {
+            ++buys;
             if (block.timestamp >= halt) tradedAtOrAfterHalt = true;
-        } catch {}
+        } catch (bytes memory err) {
+            if (!isExpectedTradeRevert(err)) unexpectedRevert = true;
+        }
     }
 
     function sell(uint256 a, uint8 k, uint256 sh) external {
-        address who = actors[a % 8];
+        ++calls;
         k = uint8(bound(k, 0, m.config().n - 1));
-        uint256 held = m.shares(who, k);
+        address who;
+        uint256 held;
+        for (uint256 j; j < 8 && held == 0; ++j) {
+            who = actors[(a % 8 + j) % 8]; // first actor from a with a position in k
+            held = m.shares(who, k);
+        }
         if (held == 0) return;
         sh = bound(sh, 1, held);
         vm.prank(who);
         try m.sell(k, sh, 0, type(uint64).max, address(0)) {
+            ++sells;
             if (block.timestamp >= halt) tradedAtOrAfterHalt = true;
-        } catch {}
+        } catch (bytes memory err) {
+            if (!isExpectedTradeRevert(err)) unexpectedRevert = true;
+        }
     }
 
     function warp(uint256 dt) external {
-        vm.warp(block.timestamp + bound(dt, 0, 2 hours));
+        ++calls;
+        vm.warp(block.timestamp + bound(dt, 0, 30 minutes));
     }
 
-    function toggleCA(bool on) external {
-        token.setOraclePaused(on);
+    function toggleCA(uint256 r) external {
+        ++calls;
+        token.setOraclePaused(r % 8 == 0); // paused for ~1 in 8 toggles
     }
 
     function sumShares(uint8 k) external view returns (uint256 s) {
@@ -94,6 +113,17 @@ contract LMSRMarketInvariantTest is MarketFixture {
             s += p[i];
         }
         assertLe(s, 1e18);
+    }
+
+    function invariant_noUnexpectedRevert() public view {
+        assertFalse(h.unexpectedRevert(), "panic or unexpected revert in a trade");
+    }
+
+    function afterInvariant() public {
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("buys", h.buys());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("sells", h.sells());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("calls", h.calls());
+        if (h.calls() >= 50) assertGt(h.buys() + h.sells(), 0, "no trade succeeded in a run");
     }
 
     function invariant_I7_noTradeAfterHalt() public view {
