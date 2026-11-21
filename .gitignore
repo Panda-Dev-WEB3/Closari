@@ -1,0 +1,8 @@
+*.zip
+node_modules/
+apps/site/dist/
+contracts/out/
+contracts/cache/
+.env
+.env.*
+!.env.example
