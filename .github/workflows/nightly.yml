@@ -7,6 +7,7 @@ permissions:
 jobs:
   invariants:
     runs-on: ubuntu-24.04
+    timeout-minutes: 300
     env:
       RPC_4663: ${{ secrets.RPC_4663 != '' && secrets.RPC_4663 || 'https://rpc.mainnet.chain.robinhood.com' }}
     steps:
@@ -18,4 +19,7 @@ jobs:
         with: { version: v1.8.1 }
       - run: bun install --frozen-lockfile
       - run: FOUNDRY_PROFILE=nightly bun run contracts:test
-      - run: bun run --cwd packages/core probe && bun run --cwd packages/core scan && git diff --exit-code -- contracts/deployments || echo "::warning::new stock tokens since the pinned scan"
+      - name: chain probe
+        run: bun run --cwd packages/core probe
+      - name: pinned stock tokens unchanged
+        run: bun run --cwd packages/core scan -- --check
