@@ -10,7 +10,7 @@ import {
 
 describe("NYSE calendar", () => {
   test("DST edge 2026-11-01: EDT Friday vs EST Monday", () => {
-    expect(sessionFor("2026-10-30")).toBeNull(); // before COVERED_FROM → null
+    expect(() => sessionFor("2026-10-30")).toThrow(); // before COVERED_FROM
     expect(sessionFor("2026-11-02")).toEqual({
       dayId: 20759,
       iso: "2026-11-02",

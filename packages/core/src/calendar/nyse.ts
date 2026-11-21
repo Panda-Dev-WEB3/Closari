@@ -66,7 +66,7 @@ export function etToUtcSeconds(iso: string, hour: number, minute: number): numbe
 
 export function sessionFor(iso: string): Session | null {
   if (iso > COVERED_TO) throw new Error(`${iso} is beyond the calendar tables (${COVERED_TO})`);
-  if (iso < COVERED_FROM) return null;
+  if (iso < COVERED_FROM) throw new Error(`${iso} is before the calendar tables (${COVERED_FROM})`);
   const dayId = dayIdOf(iso);
   const weekday = new Date(dayId * DAY_MS).getUTCDay();
   if (weekday === 0 || weekday === 6 || HOLIDAYS.has(iso)) return null;

@@ -44,6 +44,23 @@ export function abiHash(abi: AbiItem[]): string {
   return h.digest("hex");
 }
 
+/** Differences between the frozen lock and the current interface hashes, one message per interface. */
+export function interfaceDrift(
+  lock: Record<string, string>,
+  hashes: Record<string, string>,
+): string[] {
+  const errors: string[] = [];
+  for (const [name, hash] of Object.entries(hashes)) {
+    if (!(name in lock)) errors.push(`${name} is missing from interfaces.lock.json`);
+    else if (lock[name] !== hash)
+      errors.push(`${name} differs from interfaces.lock.json (frozen interface changed)`);
+  }
+  for (const name of Object.keys(lock))
+    if (!(name in hashes))
+      errors.push(`${name} is in interfaces.lock.json but is not a frozen interface`);
+  return errors;
+}
+
 function constName(name: string): string {
   return `${name[0]?.toLowerCase()}${name.slice(1)}Abi`;
 }
@@ -97,10 +114,7 @@ function main(): void {
     }
     for (const f of existing) if (!files.has(f)) errors.push(`src/abi/${f} has no source ABI`);
     const lock = JSON.parse(readFileSync(LOCK, "utf8")) as Record<string, string>;
-    for (const [name, hash] of Object.entries(interfaceHashes())) {
-      if (lock[name] !== hash)
-        errors.push(`${name} differs from interfaces.lock.json (frozen interface changed)`);
-    }
+    errors.push(...interfaceDrift(lock, interfaceHashes()));
     if (errors.length) {
       console.error(errors.join("\n"));
       process.exit(1);
