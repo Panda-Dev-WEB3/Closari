@@ -10,6 +10,14 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 	}
-	@assets path /assets/* /fonts/* /art/*
-	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@static path /fonts/* /art/*
+	header @static Cache-Control "public, max-age=86400"
+	@shell {
+		not path /assets/* /fonts/* /art/* *.*
+	}
+	header @shell Cache-Control "no-cache"
+	@indexhtml path /index.html
+	header @indexhtml Cache-Control "no-cache"
 }

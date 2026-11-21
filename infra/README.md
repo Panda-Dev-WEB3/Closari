@@ -5,7 +5,8 @@ Nothing here runs until someone with access does the steps below. M1 serves only
 ## One-time VPS setup (Ubuntu 24.04+)
 
 1. Create a non-root `deploy` user with SSH-key login only:
-   `adduser --disabled-password deploy && mkdir -p /home/deploy/.ssh` and add the CI deploy public key to `authorized_keys`. In `/etc/ssh/sshd_config` set `PasswordAuthentication no` and `PermitRootLogin no`, then `systemctl reload ssh`.
+   `adduser --disabled-password deploy && install -d -m 700 -o deploy -g deploy /home/deploy/.ssh`, then write the CI deploy public key to `/home/deploy/.ssh/authorized_keys` and run `chown deploy:deploy /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys` (sshd's StrictModes rejects looser ownership or modes). In `/etc/ssh/sshd_config` set `PasswordAuthentication no` and `PermitRootLogin no`, then `systemctl reload ssh`.
+   **Before reloading sshd or enabling ufw, confirm in a second terminal that a new SSH login as `deploy` works, and keep the root session open until then.**
 2. Firewall: `ufw default deny incoming && ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 443/udp && ufw enable`.
 3. Updates and brute-force protection: `apt install unattended-upgrades fail2ban && dpkg-reconfigure -plow unattended-upgrades`.
 4. Docker Engine + Compose plugin from Docker's apt repository; add `deploy` to the `docker` group.

@@ -16,11 +16,23 @@ jobs:
         with: { bun-version-file: .bun-version }
       - run: bun install --frozen-lockfile && bun run site:build && bun run site:check
       - name: ssh key
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: rsync
-        run: rsync -az --delete apps/site/dist/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/srv/closari/site/"
+        env:
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: rsync -az --delete apps/site/dist/ "$VPS_USER@$VPS_HOST:/srv/closari/site/"
       - name: reload caddy
-        run: ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cd /srv/closari/infra && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+        env:
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: ssh "$VPS_USER@$VPS_HOST" "cd /srv/closari/infra && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile"
+      - name: remove ssh key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
