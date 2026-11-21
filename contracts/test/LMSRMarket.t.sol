@@ -403,15 +403,6 @@ contract LMSRMarketTest is MarketFixture {
         }
     }
 
-    function test_tradeIntentEntryPoints_notYetImplemented() public {
-        ILMSRMarket.TradeIntent memory ti;
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.buyWithAuthorization(ti, 0, 0, 0, bytes32(0), bytes32(0));
-        ISignatureTransfer.PermitTransferFrom memory pt;
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.buyWithPermit2(ti, pt, "");
-    }
-
     function _clone() internal returns (address) {
         return LibClone.clone(address(impl));
     }

@@ -23,6 +23,47 @@ contract MockUSDG is ERC20 {
         return 6;
     }
 
+    error CallerMustBePayee();
+    error AuthorizationNotYetValid();
+    error AuthorizationExpired();
+    error AuthorizationUsed();
+    error InvalidSignature();
+
+    bytes32 public constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+    );
+    mapping(address => mapping(bytes32 => bool)) public authorizationState;
+
+    function receiveWithAuthorization(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        if (msg.sender != to) revert CallerMustBePayee();
+        if (block.timestamp <= validAfter) revert AuthorizationNotYetValid();
+        if (block.timestamp >= validBefore) revert AuthorizationExpired();
+        if (authorizationState[from][nonce]) revert AuthorizationUsed();
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(RECEIVE_WITH_AUTHORIZATION_TYPEHASH, from, to, value, validAfter, validBefore, nonce)
+                )
+            )
+        );
+        address signer = ecrecover(digest, v, r, s);
+        if (signer == address(0) || signer != from) revert InvalidSignature();
+        authorizationState[from][nonce] = true;
+        _transfer(from, to, value);
+    }
+
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
     }

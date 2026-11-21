@@ -15,6 +15,10 @@
       "upstream": "Uniswap/permit2@cc56ad0f3439c502c246fc5cfcc3db92bb8b7219:src/interfaces/ISignatureTransfer.sol",
       "sha256": "8e7f355d7751cf96e81069c17fb97a3ec973c9391fbbb58ad3fb6e75be5cb19b"
     },
+    "contracts/test/fixtures/permit2.runtime.hex": {
+      "upstream": "chain 4663 runtime code at 0x000000000022D473030F116dDEE9F6B43aC78BA3 (canonical Permit2), fetched 2026-11-21",
+      "sha256": "eb2951865e9b523de1bafde36dfe9444dfd00cb41f73e40b87dda31e23e906f8"
+    },
     "contracts/src/vendor/permit2/IEIP712.sol": {
       "upstream": "Uniswap/permit2@cc56ad0f3439c502c246fc5cfcc3db92bb8b7219:src/interfaces/IEIP712.sol",
       "sha256": "e386407da496dbe874c10a81801c55744fb2922a51389a51c79001422e81e0cd"

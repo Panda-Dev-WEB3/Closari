@@ -6,6 +6,7 @@ import {IHousePool} from "./interfaces/IHousePool.sol";
 import {ILMSRMarket} from "./interfaces/ILMSRMarket.sol";
 import {IMarketFactory} from "./interfaces/IMarketFactory.sol";
 import {IStockToken} from "./interfaces/external/IStockToken.sol";
+import {IUSDG} from "./interfaces/external/IUSDG.sol";
 import {Constants} from "./lib/Constants.sol";
 import {LMSRMath} from "./lib/LMSRMath.sol";
 import {ISignatureTransfer} from "permit2/ISignatureTransfer.sol";
@@ -224,20 +225,40 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         _mark(f);
     }
 
-    function buyWithAuthorization(TradeIntent calldata, uint256, uint256, uint8, bytes32, bytes32)
-        external
-        pure
-        returns (uint256)
-    {
-        revert NotYetImplemented(); // Task 6
+    function buyWithAuthorization(
+        TradeIntent calldata t,
+        uint256 validAfter,
+        uint256 validBefore,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant returns (uint256 total) {
+        if (t.market != address(this)) revert WrongMarket();
+        // Pull exactly maxTotal; the intent is bound into the nonce, so a relayer cannot change any field.
+        IUSDG(USDG)
+            .receiveWithAuthorization(
+                t.owner, address(this), t.maxTotal, validAfter, validBefore, _intentHash(t), v, r, s
+            );
+        total = _signedBuy(t);
     }
 
-    function buyWithPermit2(TradeIntent calldata, ISignatureTransfer.PermitTransferFrom calldata, bytes calldata)
-        external
-        pure
-        returns (uint256)
-    {
-        revert NotYetImplemented(); // Task 6
+    function buyWithPermit2(
+        TradeIntent calldata t,
+        ISignatureTransfer.PermitTransferFrom calldata p,
+        bytes calldata sig
+    ) external nonReentrant returns (uint256 total) {
+        if (t.market != address(this)) revert WrongMarket();
+        if (p.permitted.token != USDG) revert WrongToken();
+        ISignatureTransfer(PERMIT2)
+            .permitWitnessTransferFrom(
+                p,
+                ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: t.maxTotal}),
+                t.owner,
+                _intentHash(t),
+                WITNESS_TYPE_STRING,
+                sig
+            );
+        total = _signedBuy(t);
     }
 
     function sell(uint8 outcome, uint256 sh, uint256 minNet, uint64 deadline, address builder)
@@ -290,6 +311,23 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     }
 
     // ------------------------------------------------------------------ internals
+
+    /// @dev The position goes to the signer (t.owner), never to msg.sender; the excess over the cost is refunded.
+    function _signedBuy(TradeIntent calldata t) internal returns (uint256 total) {
+        Fill memory f = _trade(t.owner, t.outcome, t.shares, true, t.builder, t.deadline);
+        total = f.gross + f.fee;
+        if (total > t.maxTotal) revert Slippage();
+        if (t.maxTotal > total) USDG.safeTransfer(t.owner, t.maxTotal - total);
+        _mark(f);
+    }
+
+    function _intentHash(TradeIntent calldata t) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                TRADE_TYPEHASH, t.market, t.owner, t.outcome, t.shares, t.maxTotal, t.deadline, t.builder, t.salt
+            )
+        );
+    }
 
     function _trade(address owner, uint8 k, uint256 sh, bool isBuy, address builder, uint64 deadline)
         internal
