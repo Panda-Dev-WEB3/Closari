@@ -1,0 +1,37 @@
+[
+  {
+    "role": "Gallery wordmark",
+    "font": "\"Magic Pixel\", Geist, sans-serif",
+    "weight": "400",
+    "width": 327.796875,
+    "loaded": true
+  },
+  {
+    "role": "Terminal wordmark",
+    "font": "\"Magic Pixel\", Geist, sans-serif",
+    "weight": "400",
+    "width": 254.1875,
+    "loaded": true
+  },
+  {
+    "role": "Footer wordmark",
+    "font": "\"Magic Pixel\", Geist, sans-serif",
+    "weight": "400",
+    "width": 532.796875,
+    "loaded": true
+  },
+  {
+    "role": "Phone wordmark",
+    "font": "\"Magic Pixel\", Geist, sans-serif",
+    "weight": "400",
+    "width": 213.0625,
+    "loaded": true
+  },
+  {
+    "role": "Mobile menu wordmark",
+    "font": "\"Magic Pixel\", Geist, sans-serif",
+    "weight": "400",
+    "width": 159.8125,
+    "loaded": true
+  }
+]

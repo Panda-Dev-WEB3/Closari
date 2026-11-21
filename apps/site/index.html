@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="theme-color" content="#111b32" />
+    <script>
+      const desk = /^\/terminal(?:\/|$)/.test(location.pathname);
+      let theme = desk ? "light" : "dark";
+      try {
+        const saved = localStorage.getItem(
+          "closari.appearance." + (desk ? "desk" : "site"),
+        );
+        if (saved === "light" || saved === "dark") theme = saved;
+      } catch {}
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]').content =
+        theme === "light" ? "#fafafa" : "#111b32";
+    </script>
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="Explore daily stock-token closing markets, inspect the settlement rules and try a paper position in Closari."
+    />
+    <link rel="icon" href="/mark.png" type="image/png" />
+    <link
+      rel="preload"
+      href="/fonts/geist.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/geist-mono.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/MagicPixel-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <title>Closari · Stock-close markets</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

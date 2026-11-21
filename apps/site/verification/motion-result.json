@@ -1,0 +1,12 @@
+{
+  "checks": [
+    "Pointer hover shows opening affordance",
+    "Wheel settles one chapter forward",
+    "Pointer drag settles without navigating",
+    "Progress rail dragging selects Roadmap",
+    "Closing-price scenario switches between void band and a winning example",
+    "Dismissed review preserves balance",
+    "Phone touch swipe advances the vertical ribbon",
+    "Touch opens the centered field study"
+  ]
+}

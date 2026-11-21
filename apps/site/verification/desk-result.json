@@ -1,0 +1,30 @@
+{
+  "checks": [
+    "Fresh landing uses navy",
+    "Hero states the product",
+    "Official white lockup has a transparent surround",
+    "Folded C turns in three dimensions",
+    "Pausing freezes the cube",
+    "Client navigation applies independent white desk default",
+    "Former heading removed",
+    "Desk choice leaves landing preference alone",
+    "Manual desk choice survives reload",
+    "Manual gallery choice survives reload",
+    "Six independent strike selectors",
+    "Selector drives active price",
+    "Keyboard finder lists 96 markets",
+    "Multi-term finder narrows to one contract",
+    "TSLA 50-share fill gross matches the brief",
+    "Ticket shows price after the range order",
+    "Local market volume tracks confirmed fills",
+    "Pre-close proof and claims are pending",
+    "320px ticket fits its contents and neighboring cards",
+    "390px ticket fits its contents and neighboring cards",
+    "768px ticket fits its contents and neighboring cards",
+    "1024px ticket fits its contents and neighboring cards",
+    "1440px ticket fits its contents and neighboring cards",
+    "Mobile shortcut focuses order ticket",
+    "No page errors or failed network requests"
+  ],
+  "errors": []
+}
