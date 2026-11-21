@@ -1,0 +1,19 @@
+{
+  "name": "@closari/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build": "forge build --sizes",
+    "test": "forge test --no-match-path 'test/fork/*'",
+    "test:fork": "forge test --match-path 'test/fork/*' -vv",
+    "fmt": "forge fmt",
+    "fmt:check": "forge fmt --check",
+    "snapshot": "forge snapshot --no-match-path 'test/fork/*' --no-match-test 'testFuzz|invariant'",
+    "snapshot:check": "forge snapshot --check --tolerance 5 --no-match-path 'test/fork/*' --no-match-test 'testFuzz|invariant'",
+    "coverage": "forge coverage --report lcov --no-match-path 'test/fork/*' --no-match-coverage '(test|script|vendor)/'"
+  },
+  "devDependencies": {
+    "@pythnetwork/pyth-sdk-solidity": "4.3.1",
+    "solady": "0.1.26"
+  }
+}

@@ -1,0 +1,39 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib", "../node_modules"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 10000
+via_ir = false
+bytecode_hash = "none"
+fs_permissions = [
+  { access = "read", path = "./test/vectors" },
+  { access = "read", path = "./deployments" },
+  { access = "read", path = "./config" },
+]
+
+[profile.default.fuzz]
+runs = 10000
+
+[profile.default.invariant]
+runs = 1000
+depth = 200
+
+[profile.lite.fuzz]
+runs = 256
+
+[profile.nightly.invariant]
+runs = 50000
+depth = 200
+
+[rpc_endpoints]
+rh = "${RPC_4663}"
+
+[fmt]
+line_length = 120
+sort_imports = true
+ignore = ["src/vendor/**"]

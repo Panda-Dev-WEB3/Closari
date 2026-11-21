@@ -1,0 +1,5 @@
+forge-std/=lib/forge-std/src/
+solady/=../node_modules/solady/src/
+@pythnetwork/pyth-sdk-solidity/=../node_modules/@pythnetwork/pyth-sdk-solidity/
+@chainlink/=src/vendor/chainlink/
+permit2/=src/vendor/permit2/

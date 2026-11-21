@@ -1,0 +1,23 @@
+{
+  "submodules": {
+    "contracts/lib/forge-std": { "url": "https://github.com/foundry-rs/forge-std", "tag": "v1.17.0", "commit": "f3dae6e6ee381f25eb6a246f7da9b85c91a68219" }
+  },
+  "vendored": {
+    "contracts/src/vendor/chainlink/AggregatorV3Interface.sol": {
+      "upstream": "smartcontractkit/chainlink-brownie-contracts@f82d1ac09fc5d3190600d308be99a4a509854686:contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol",
+      "sha256": "87fd1685e015c2001673b442c212f07847a64afa2f3b22bbbcb7f211ed293e88"
+    },
+    "contracts/src/vendor/permit2/ISignatureTransfer.sol": {
+      "upstream": "Uniswap/permit2@cc56ad0f3439c502c246fc5cfcc3db92bb8b7219:src/interfaces/ISignatureTransfer.sol",
+      "sha256": "8e7f355d7751cf96e81069c17fb97a3ec973c9391fbbb58ad3fb6e75be5cb19b"
+    },
+    "contracts/src/vendor/permit2/IEIP712.sol": {
+      "upstream": "Uniswap/permit2@cc56ad0f3439c502c246fc5cfcc3db92bb8b7219:src/interfaces/IEIP712.sol",
+      "sha256": "e386407da496dbe874c10a81801c55744fb2922a51389a51c79001422e81e0cd"
+    }
+  },
+  "npm": {
+    "solady": "0.1.26",
+    "@pythnetwork/pyth-sdk-solidity": "4.3.1"
+  }
+}

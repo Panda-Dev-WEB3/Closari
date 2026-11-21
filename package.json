@@ -1,7 +1,7 @@
 {
   "name": "closari",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": ["apps/*", "packages/*", "contracts"],
   "scripts": {
     "site:dev": "bun run --cwd apps/site dev",
     "site:build": "bun run --cwd apps/site build",
