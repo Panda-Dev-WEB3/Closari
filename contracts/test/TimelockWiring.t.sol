@@ -7,6 +7,7 @@ import {MockDayFlags} from "./mocks/MockDayFlags.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC7821} from "solady/accounts/ERC7821.sol";
 import {Timelock} from "solady/accounts/Timelock.sol";
+import {EnumerableRoles} from "solady/auth/EnumerableRoles.sol";
 
 contract TimelockWiringTest is Test {
     bytes32 constant MODE = 0x0100000000007821000100000000000000000000000000000000000000000000;
@@ -32,16 +33,27 @@ contract TimelockWiringTest is Test {
         vm.expectRevert(IExchangeCalendar.NotTimelock.selector);
         cal.setSessions(d, s);
 
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(EnumerableRoles.EnumerableRolesUnauthorized.selector);
+        tl.propose(MODE, data, 48 hours);
+
         vm.prank(multisig);
         tl.propose(MODE, data, 48 hours);
         vm.prank(multisig);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Timelock.TimelockInvalidOperation.selector, keccak256(abi.encode(MODE, keccak256(data))), uint256(4)
+            )
+        );
         tl.execute(MODE, data); // not ready yet
         vm.warp(block.timestamp + 48 hours);
         vm.prank(multisig);
         tl.execute(MODE, data);
         assertTrue(cal.isTradingDay(MON));
 
+        assertTrue(tl.hasRole(multisig, 1)); // PROPOSER
+        assertTrue(tl.hasRole(multisig, 2)); // EXECUTOR
+        assertTrue(tl.hasRole(multisig, 3)); // CANCELLER
         for (uint256 role; role <= 3; ++role) {
             assertFalse(tl.hasRole(address(this), role));
         }

@@ -18,8 +18,10 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC7821} from "solady/accounts/ERC7821.sol";
 import {Timelock} from "solady/accounts/Timelock.sol";
 
-/// @notice M1 end-to-end on anvil (31337) or an anvil fork of 4663. Deploys MOCKS for pool/oracle/router/market:
-///         never broadcast to a live chain. Guarded by CLOSARI_LOCAL_DEPLOY=true.
+/// @notice M1 end-to-end on anvil (31337) or an anvil fork of 4663. Deploys MOCKS for pool/oracle/router/market.
+///         An anvil fork and the live chain 4663 share the chain id, so the chain id cannot tell them apart. The
+///         guards are the CLOSARI_LOCAL_DEPLOY=true flag plus an `anvil_nodeInfo` RPC probe that only anvil answers.
+///         The hardcoded keys are anvil's PUBLIC test keys: never fund them on a live chain.
 contract DeployLocal is Script {
     bytes32 constant MODE = 0x0100000000007821000100000000000000000000000000000000000000000000;
     // anvil default accounts 0, 1, 2 (public test keys)
@@ -41,6 +43,10 @@ contract DeployLocal is Script {
     function run() external returns (Deployed memory dep) {
         require(vm.envOr("CLOSARI_LOCAL_DEPLOY", false), "DeployLocal: set CLOSARI_LOCAL_DEPLOY=true (mocks only)");
         require(block.chainid == 31337 || block.chainid == 4663, "DeployLocal: anvil or anvil --fork-url 4663 only");
+        try vm.rpc("anvil_nodeInfo", "[]") returns (bytes memory) {}
+        catch {
+            revert("DeployLocal: RPC is not an anvil node (refusing a live chain)");
+        }
         address deployer = vm.addr(DEPLOYER_PK);
         address multisig = vm.addr(MULTISIG_PK);
 

@@ -4,7 +4,7 @@ apps/site/dist/
 apps/site/.vite/
 contracts/out/
 contracts/cache/
-contracts/broadcast/*/31337/
+contracts/broadcast/
 contracts/lcov.info
 contracts/aderyn.json
 coverage/
