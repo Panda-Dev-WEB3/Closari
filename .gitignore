@@ -13,3 +13,6 @@ coverage/
 !.env.example
 __pycache__/
 .DS_Store
+
+# Internal working documents (briefs, handoff notes, implementation plans, ledgers): local only, never pushed
+docs/internal/

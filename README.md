@@ -170,7 +170,7 @@ Open design decisions are tracked in the
 | `packages/core` | Generated ABIs, calendar and strike references (`@closari/core`) |
 | `apps/{keeper,indexer,api,mcp,calendar,hermes}` | Services, from M4 on |
 | `infra` | OVH VPS stack (Caddy now, services later); see `infra/README.md` |
-| `docs` | Briefs, handoff notes, specs, plans and the M1 execution ledger |
+| `docs/superpowers/specs` | Design spec, interface change log, cross-milestone obligations, open decisions |
 
 Setup: Bun 1.4.2 (`.bun-version`), Foundry 1.8.1 (`.foundry-version`), Node 24.
 
@@ -203,6 +203,6 @@ Then rebuild and re-freeze:
 
     bun run contracts:build && bun run abi:write && bun run abi:freeze && bun run abi:check
 
-Media (films, campaign, art masters) lives outside git in the local media folder.
+Media masters (films, campaign, art sources) and internal working documents are kept outside this public repository.
 
 **Licence:** not yet chosen (MIT or BUSL is an open decision); all source files are `UNLICENSED` until then.

@@ -20,11 +20,11 @@ Set up the single Closari repository and deliver milestone **M1** of the Backend
 | Decision | Choice | Why |
 |---|---|---|
 | First sub-project | Monorepo + M1 | Every later milestone builds on M1's frozen interfaces |
-| Code host / CI | GitHub, private repo under **Panda-Dev-WEB3**, GitHub Actions | Matches §10 (Actions, Renovate) |
+| Code host / CI | GitHub (public repo `Panda-Dev-WEB3/Closari`), GitHub Actions | Matches §10 (Actions, Renovate) |
 | Runtime target | OVH VPS (Docker Compose) | User's hosting choice |
 | Repo layout | One Bun-workspace monorepo (option A) | ABIs flow from `forge build` into `@closari/core` with no cross-repo publishing |
 | Package manager | Bun for everything, including the site | The site has three exact-pinned deps (react 19.2.0, react-dom 19.2.0, vite 7.2.2), so moving off pnpm is trivial; §10 requires `bun install --frozen-lockfile` |
-| Media | Outside git, in the local media folder | ~180 MB of films, campaign and raster masters the site does not load |
+| Media | Outside git, in a local media folder | ~180 MB of films, campaign and raster masters the site does not load |
 | Web server | Caddy | SPA fallback and automatic TLS in a few lines |
 | Licence | `SPDX-License-Identifier: UNLICENSED` | Open question 12 (MIT vs BUSL) is undecided; switching later is a one-line search-and-replace |
 | Void rule | The audit's 60-minute TWAP rule (lifetime window for guardian voids) | The audit log amends the Overview; interfaces must match it |
@@ -34,7 +34,7 @@ Set up the single Closari repository and deliver milestone **M1** of the Backend
 ## 3. Repository layout
 
 ```
-<repo root>                 (repo root, branch main)
+<repo root>                         (branch main)
   package.json                      Bun workspaces: apps/*, packages/*, contracts; exact versions only
   bun.lock  .bun-version  .foundry-version  .nvmrc
   DEPENDENCIES.lock                 forge-std commit, vendored-file sha256s, npm and CI pins; checked in CI
@@ -65,14 +65,13 @@ Set up the single Closari repository and deliver milestone **M1** of the Backend
     README.md                       VPS hardening + deploy runbook
   security/triage.md                static-analysis triage log (Slither; Aderyn retired, §7.1)
   docs/
-    briefs/                         CLOSARI_Overview.md, CLOSARI_Backend.md (one copy each)
-    handoff/                        Dashboard-Audit, DESIGN-AND-STATUS, art-direction, GRAPHICS, inspo-research, token-sources, Backend-Handoff.pdf
+    internal/                       git-ignored, local only: product briefs, handoff notes, implementation plans, ledgers
     superpowers/specs/              this file
   .github/workflows/                ci.yml, nightly.yml, deploy-site.yml
   .github/renovate.json
 ```
 
-**Kept outside git, in the local media folder:** the original ZIP (untouched archive), `artwork/`, `art-source/`, `campaign/`, verification screenshots. `.gitignore` also excludes `*.zip`, `apps/site/dist/`, `contracts/out/`, `contracts/cache/`, `node_modules/`, `.env*`.
+**Kept outside git, in a local media folder:** the original ZIP (untouched archive), `artwork/`, `art-source/`, `campaign/`, verification screenshots. `.gitignore` also excludes `*.zip`, `apps/site/dist/`, `contracts/out/`, `contracts/cache/`, `node_modules/`, `.env*`.
 
 The site's runtime images and fonts are under `apps/site/public` and stay in git (about 4 MB), so the site builds from a clean clone.
 
@@ -202,7 +201,7 @@ Every action is pinned by commit SHA. `nightly.yml` runs 50k invariant runs. Ren
 
 ### 7.3 GitHub
 
-Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: branch protection on `main` (CI required, no force pushes) and Renovate enabled.
+Public repo `Panda-Dev-WEB3/Closari`. Repository settings: branch protection on `main` (CI required, no force pushes) and Renovate enabled.
 
 ## 8. Tests (M1 acceptance)
 
@@ -232,7 +231,7 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 ## 10. Prerequisites and risks
 
 - **Bun** is not installed. It comes from the official installer, needs the user's approval, and the version is pinned in `.bun-version`.
-- **GitHub access** to Panda-Dev-WEB3 (see §2).
+- **GitHub access** via the repository's deploy key (see §2).
 - **Public-RPC rate limits** may throttle fork tests in CI. If so, a paid RPC URL goes into `RPC_4663`.
 - **Two unconfirmed (U) facts are checked live in M1:** that 4663 accepts Cancun, and that SBXSTK/ACME are not genuine (resolved: they are not deployed by the stock-token factory, so the look-alike etch test replaces them, §8). If either result differs from the brief, work stops and the finding is reported before the design is changed.
 - **Windows host:** Slither runs in CI (Linux). Locally it runs in Docker if needed.
