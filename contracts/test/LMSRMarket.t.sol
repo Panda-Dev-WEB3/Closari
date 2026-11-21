@@ -358,11 +358,49 @@ contract LMSRMarketTest is MarketFixture {
         _buy(m, alice, 0, 1e6);
         (, uint256[][2] memory cum2) = m.checkpoints();
         assertEq(cum2[0].length, 2);
-        assertEq(cum2[0][0] + cum2[0][1], uint256(ts[0] - CREATED) * 1e18);
+        assertEq(cum2[0][0], uint256(ts[0] - CREATED) * 5e17); // flat uniform prior: exact
+        assertEq(cum2[0][1], uint256(ts[0] - CREATED) * 5e17);
 
         LMSRMarket u = _market(IMarketFactory.Kind.UPDOWN, _uniform(2), BUDGET);
         (uint64[2] memory uts,) = u.checkpoints();
         assertGt(uts[1], 0);
+    }
+
+    function test_checkpoint_excludesCrossingTradePrice() public {
+        (uint64[2] memory ts,) = m.checkpoints();
+        uint64 cp = ts[0];
+        uint64 t1 = CREATED + 1_000;
+        vm.warp(t1);
+        _buy(m, alice, 0, 100e6);
+        uint256 pAfter = m.prices()[0];
+        assertGt(pAfter, 5e17);
+        vm.warp(cp + 10);
+        _buy(m, bob, 0, 100e6); // crosses the checkpoint
+        uint256 pCross = m.prices()[0];
+        assertGt(pCross, pAfter);
+        (, uint256[][2] memory cum) = m.checkpoints();
+        uint256 expected0 = 5e17 * uint256(t1 - CREATED) + pAfter * uint256(cp - t1);
+        assertEq(cum[0][0], expected0);
+        assertEq(cum[0][1], uint256(cp - CREATED) * 1e18 - expected0);
+        // the crossing trade's own price must not leak in
+        assertLt(cum[0][0], expected0 + pCross); // sanity: differs from any leaked value
+        assertTrue(cum[0][0] != expected0 + (pCross - pAfter) * 10);
+    }
+
+    function test_checkpoints_singleRollCrossesBoth_updown() public {
+        LMSRMarket u = _market(IMarketFactory.Kind.UPDOWN, _uniform(2), BUDGET);
+        (uint64[2] memory ts,) = u.checkpoints();
+        assertEq(ts[1], OPEN - Constants.VOID_TWAP_WINDOW);
+        assertLt(ts[1], ts[0]);
+        vm.warp(ts[0] + 10); // after both checkpoints, before the halt, no trade so far
+        vm.prank(oracle);
+        u.setOpenReference(18_800_000_000, 1e6); // the first roll crosses both
+        _buy(u, alice, 0, 1e6);
+        (, uint256[][2] memory cum) = u.checkpoints();
+        for (uint256 j; j < 2; ++j) {
+            assertEq(cum[j][0], uint256(ts[j] - CREATED) * 5e17);
+            assertEq(cum[j][1], uint256(ts[j] - CREATED) * 5e17);
+        }
     }
 
     function test_tradeIntentEntryPoints_notYetImplemented() public {
