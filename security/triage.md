@@ -1,6 +1,6 @@
 # Security triage
 
-Every Slither/Aderyn finding at medium or above is either fixed or listed here with a reason. A triaged Slither finding also carries `// slither-disable-next-line <detector>` at the site, with a pointer to the entry below.
+Every Slither finding (Aderyn is retired upstream) at medium or above is either fixed or listed here with a reason. A triaged Slither finding also carries `// slither-disable-next-line <detector>` at the site, with a pointer to the entry below.
 
 | Tool | Detector / title | Location | Decision | Reason |
 |---|---|---|---|---|
