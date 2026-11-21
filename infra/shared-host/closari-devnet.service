@@ -1,0 +1,20 @@
+# Closari local devnet: anvil on loopback only, chain id 31337, deployed with contracts/script/DeployLocal.s.sol
+# (mocks for pool/oracle/router/market). It uses anvil's PUBLIC test keys and is never reachable from outside.
+# Installed by infra/shared-host/deploy.sh with __USER__, __ANVIL__, __PORT__ and __STATE__ filled in.
+[Unit]
+Description=Closari devnet (anvil, loopback only)
+After=network.target
+
+[Service]
+User=__USER__
+ExecStart=__ANVIL__ --host 127.0.0.1 --port __PORT__ --chain-id 31337 --state __STATE__/state.json --state-interval 60
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__STATE__
+
+[Install]
+WantedBy=multi-user.target

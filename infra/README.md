@@ -27,6 +27,16 @@ GitHub → Actions → `deploy-site` → Run workflow. It needs these repository
 
 The workflow builds `apps/site`, rsyncs `dist/` to `/srv/closari/site/` and reloads Caddy. Roll back by re-running it on an earlier commit.
 
+## Shared host (existing nginx on 80/443)
+
+On a host where another web server already owns ports 80/443, skip the Caddy stack and use `infra/shared-host/`:
+
+1. Install Bun at the version in `.bun-version` for the deploying user; that user needs sudo, and the host needs nginx and certbot.
+2. `sudo install -d -o $USER /opt/closari && git clone --recurse-submodules https://github.com/Panda-Dev-WEB3/Closari.git /opt/closari/repo`
+3. Point the domain at the host, then `/opt/closari/repo/infra/shared-host/deploy.sh <domain>`.
+
+The script installs Foundry v1.8.1 under `/opt/closari/toolchain`, builds, publishes `apps/site/dist` to `/var/www/closari`, adds an nginx vhost (certbot adds TLS on first install), and runs `closari-devnet.service`: anvil on `127.0.0.1:18545` (never exposed), with the M1 contracts deployed once by `DeployLocal.s.sol` (addresses in `/opt/closari/devnet/deploy.log`). To update, `git pull` and run the script again.
+
 ## Later milestones
 
 Postgres 16 + TimescaleDB, Redis, keeper, Hermes fetcher, indexer, API and MCP are added to `docker-compose.yml` in M4–M6 with images pinned by digest. Keeper and Hermes secrets live only in the VPS environment, never in the repo (Backend §10).
