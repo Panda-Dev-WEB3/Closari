@@ -64,6 +64,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
     uint8 internal constant SKIP_BUDGET = 2;
     uint8 internal constant SKIP_POOL_REFUSED = 3;
     uint8 internal constant SKIP_NO_EDGE = 4;
+    uint8 internal constant SKIP_AFTER_OPEN = 5;
 
     IExchangeCalendar public immutable calendar;
     IStockTokenAllowList public immutable allowList;
@@ -157,6 +158,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         hasMarkets[dayId] = true;
 
         markets = _createMarkets(token, dayId, a);
+        if (!_anyOpened(markets)) revert NoMarketsOpened(token, dayId);
         day.markets = markets;
         if (listingBounty != 0) router.creditBounty(msg.sender, listingBounty);
         emit DayListed(token, dayId, day.refPrice8, mult, markets);
@@ -241,7 +243,19 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
             else markets[idx] = _open(sp);
             ++idx;
         }
-        if (upDown) markets[idx] = _open(Spec(token, dayId, idx, Kind.UPDOWN, new int64[](0), a.budgetUpDown));
+        if (upDown) {
+            Spec memory sp = Spec(token, dayId, idx, Kind.UPDOWN, new int64[](0), a.budgetUpDown);
+            // An UP/DOWN market prices the move from the open, so it is never listed once the session has opened.
+            if (block.timestamp >= _days[token][dayId].openTs) _skipped(sp, SKIP_AFTER_OPEN);
+            else markets[idx] = _open(sp);
+        }
+    }
+
+    function _anyOpened(address[] memory markets) internal pure returns (bool) {
+        for (uint256 i; i < markets.length; ++i) {
+            if (markets[i] != address(0)) return true;
+        }
+        return false;
     }
 
     function _open(Spec memory sp) internal returns (address m) {

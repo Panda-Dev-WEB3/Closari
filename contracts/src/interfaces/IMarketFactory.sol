@@ -22,7 +22,8 @@ interface IMarketFactory {
 
     /// @dev SKIP reasons for MarketSkipped.
     /// 1 = strike collapsed (duplicate or non-positive), 2 = budget gives b outside [1e3, 1e6] shares,
-    /// 3 = pool refused the allocation, 4 = range template produced no edge.
+    /// 3 = pool refused the allocation, 4 = range template produced no edge,
+    /// 5 = UPDOWN not listed at or after the session open (block.timestamp >= openTs).
     event DayListed(
         address indexed token, uint32 indexed dayId, int64 refPrice8, uint256 multiplier, address[] markets
     );
@@ -59,6 +60,8 @@ interface IMarketFactory {
     /// @dev The pool reverted with empty data (out of gas or a bare revert). Listing reverts instead of skipping,
     ///      so a caller cannot starve pool.allocate of gas to drop markets. Pool refusals must use a custom error.
     error AllocationFailed();
+    /// @dev Every template market was skipped. The whole listing reverts: no bounty, no snapshot, day stays listable.
+    error NoMarketsOpened(address token, uint32 dayId);
 
     /// @notice Permissionless. Lists all template markets for (token, dayId). Excess msg.value is refunded.
     /// Requires: !listingPaused; asset listed & genuine; session exists; now < closeTs - 600 - 3600;
@@ -66,6 +69,7 @@ interface IMarketFactory {
     /// not listed yet; not skipped; !oraclePaused(); no pending multiplier change with effectiveAt <= closeTs + 3600;
     /// pool has no matured unprocessed withdrawals; reference from the last final close within 3 trading days
     /// (rescaled by the current multiplier), else from refPythUpdate (publishTime within 120 s, conf/price <= 0.5%).
+    /// Reverts NoMarketsOpened if every template market is skipped; no bounty is paid and the day stays listable.
     function listDay(address token, uint32 dayId, bytes[] calldata refPythUpdate)
         external
         payable

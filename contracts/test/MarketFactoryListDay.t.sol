@@ -168,14 +168,52 @@ contract MarketFactoryListDayTest is Fixture {
         factory.listDay{value: 1, gas: 3_000_000}(address(nvda), FRI, u);
     }
 
-    function test_budgetOutOfRange_skipsEveryMarket() public {
+    function test_budgetOutOfRange_revertsNoMarketsOpened() public {
         _setNvda(PYTH_ID, true, 1e6); // 1 USDG → b ≈ 1.44 shares < 1,000
-        address[] memory m = _listFri();
-        for (uint256 i; i < m.length; ++i) {
-            assertEq(m[i], address(0));
-        }
-        assertTrue(factory.hasMarkets(FRI));
+        vm.warp(FRI_OPEN - 3 hours);
+        bytes[] memory u = _updateNow(NVDA_PRICE);
+        vm.expectRevert(abi.encodeWithSelector(IMarketFactory.NoMarketsOpened.selector, address(nvda), FRI));
+        _listWith(FRI, u);
+        assertFalse(factory.hasMarkets(FRI));
+        assertEq(factory.dayInfo(address(nvda), FRI).createdTs, 0);
         assertEq(pool.allocateCalls(), 0);
+        assertEq(router.creditCalls(), 0);
+    }
+
+    function test_allPoolRefusals_revertNoMarketsOpened() public {
+        pool.setRefuseAll(true);
+        vm.warp(FRI_OPEN - 3 hours);
+        bytes[] memory u = _updateNow(NVDA_PRICE);
+        vm.expectRevert(abi.encodeWithSelector(IMarketFactory.NoMarketsOpened.selector, address(nvda), FRI));
+        _listWith(FRI, u);
+        assertEq(router.creditCalls(), 0);
+        assertFalse(factory.hasMarkets(FRI));
+
+        pool.setRefuseAll(false);
+        address[] memory m = _listWith(FRI, u); // the day stays listable
+        assertEq(m.length, 8);
+        assertTrue(factory.hasMarkets(FRI));
+        assertEq(router.creditCalls(), 1);
+    }
+
+    function test_upDown_skippedAtOpen() public {
+        vm.warp(FRI_OPEN);
+        bytes[] memory u = _updateNow(NVDA_PRICE);
+        vm.expectEmit(true, true, false, true);
+        emit IMarketFactory.MarketSkipped(address(nvda), FRI, 7, 5);
+        address[] memory m = _listWith(FRI, u);
+        assertEq(m[7], address(0));
+        assertFalse(factory.isMarket(factory.predictMarket(address(nvda), FRI, 7)));
+        for (uint256 i; i < 7; ++i) {
+            assertTrue(m[i] != address(0));
+        }
+    }
+
+    function test_upDown_listedOneSecondBeforeOpen() public {
+        vm.warp(FRI_OPEN - 1);
+        address[] memory m = _listWithPyth(FRI, NVDA_PRICE);
+        assertTrue(m[7] != address(0));
+        assertEq(uint8(MockMarket(m[7]).config().kind), uint8(IMarketFactory.Kind.UPDOWN));
     }
 
     function test_collapsedStrikes_andSingleEdgeRange() public {

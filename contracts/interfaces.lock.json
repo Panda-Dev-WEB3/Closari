@@ -1,7 +1,7 @@
 {
   "IExchangeCalendar": "4e04729403514daff98b10698aa76a5f1fc24985087268914e8276c001540fdf",
   "IStockTokenAllowList": "dbd53c505dcd487d0e41990b6198c1316d92878d4b792b34ec06240e83f19691",
-  "IMarketFactory": "5a1f4e9eb5c0d69925665407d3e735e6952e4281ba8ed4e5de13dbaf1aa038c3",
+  "IMarketFactory": "ae613b34a5b5ef64281c9eaee16c42af6b0c0ca87aff4f8eefd99a1b1a51667b",
   "ILMSRMarket": "8772fb8a96fd12860df4584529b808b2241e4b942c74c5ad2f63105e78e60f9e",
   "ISettlementOracle": "4aae4891842b255145a55e4b6846e098e5e686cd5ae14a1e5c01e70d18c0e38e",
   "IHousePool": "bb9c96a56c3bdb3d5c8f45be08ab082989fd4f68595dd4cb05f301a073b0fff7",

@@ -572,6 +572,22 @@ export const iMarketFactoryAbi = [
   },
   {
     "type": "error",
+    "name": "NoMarketsOpened",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "dayId",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "NoSession",
     "inputs": [
       {

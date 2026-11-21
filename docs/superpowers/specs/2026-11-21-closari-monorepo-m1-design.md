@@ -237,3 +237,13 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 - Change: new error; `listDay(D)` reverts until the previous trading day's close has passed (no bound if no session exists in the prior 10 days).
 - Why: the Task 9 review found that any caller could list far-future days with a stale Pyth reference, lock the calendar early, tie up pool budget and collect bounties. The Overview intends day D to be listed right after D−1 settles.
 - Affects: M4 keeper (`listDay` job already runs after D−1 is final); M8 deploy scripts.
+
+### 2026-11-21 — IMarketFactory.NoMarketsOpened(address token, uint32 dayId)
+- Change: new error; `listDay` reverts `NoMarketsOpened` when every template market is skipped. The whole transaction reverts, so `createdTs`, `hasMarkets` and the listing bounty roll back and the day stays listable.
+- Why: final-review finding #1a. A listing that opened nothing still paid the bounty, set `hasMarkets` (locking the calendar day) and blocked a retry, for example after a transient pool refusal or a budget misconfiguration.
+- Affects: M4 keeper (treat `NoMarketsOpened` as retryable once the cause is fixed); M4 indexer (no `DayListed` for such a day).
+
+### 2026-11-21 — IMarketFactory skip reason 5 (documentation of skip reason 5)
+- Change: NatSpec only, no ABI change. `MarketSkipped(token, dayId, index, 5)`: the UPDOWN market is not listed when `block.timestamp >= openTs`.
+- Why: final-review finding #2. An UP/DOWN market prices the move from the open; listing it after the open lets buyers trade on an already-known direction.
+- Affects: M4 keeper and indexer (new skip reason value); M2 market (UPDOWN markets always have `createdTs < openTs`).
