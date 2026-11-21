@@ -36,5 +36,17 @@ contract MockHousePool {
         }
         if (refuseAll || refuseMarket[market]) revert Refused();
         allocated[market] = budget;
+        worst[market] = int256(budget);
+        best[market] = int256(budget);
+    }
+
+    mapping(address => int256) public worst;
+    mapping(address => int256) public best;
+    uint256 public markCalls;
+
+    function onMark(int256 dWorst, int256 dBest) external {
+        worst[msg.sender] += dWorst;
+        best[msg.sender] += dBest;
+        ++markCalls;
     }
 }

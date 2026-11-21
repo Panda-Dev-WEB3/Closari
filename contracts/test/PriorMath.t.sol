@@ -60,6 +60,15 @@ contract PriorMathTest is Test {
         assertLt(p[1], 0.052e18);
     }
 
+    function test_floorNormalize_topsUpLargestWhenSumBelowOne() public view {
+        uint256[] memory p = new uint256[](3);
+        (p[0], p[1], p[2]) = (3e17, 2e17, 1e17); // sums to 0.6, nothing is floored
+        uint256[] memory q = h.floorNormalize(p);
+        assertEq(q[0], 7e17); // the largest absorbs the 0.4 shortfall
+        assertEq(q[1], 2e17);
+        assertEq(q[2], 1e17);
+    }
+
     function test_floorNormalize_sumsExactlyAndRespectsFloor() public view {
         uint256[] memory p = new uint256[](5);
         (p[0], p[1], p[2], p[3], p[4]) = (1e15, 3e17, 6e17, 99e15 - 2, 1e15);

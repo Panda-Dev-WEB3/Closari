@@ -4,7 +4,13 @@ pragma solidity 0.8.28;
 import {StockTokenAllowList} from "../src/StockTokenAllowList.sol";
 import {IStockTokenAllowList} from "../src/interfaces/IStockTokenAllowList.sol";
 import {MockAggregator} from "./mocks/MockAggregator.sol";
-import {MockBeacon, MockBeaconBurnsGas, MockBeaconCostly, MockBeaconShortReturn} from "./mocks/MockBeacon.sol";
+import {
+    MockBeacon,
+    MockBeaconBurnsGas,
+    MockBeaconCostly,
+    MockBeaconDirtyReturn,
+    MockBeaconShortReturn
+} from "./mocks/MockBeacon.sol";
 import {MockStockToken, MockStockTokenLookalike} from "./mocks/MockStockToken.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -57,6 +63,12 @@ contract StockTokenAllowListTest is Test {
     function test_isGenuine_failsClosedOnShortReturn() public {
         StockTokenAllowList l =
             new StockTokenAllowList(address(new MockBeaconShortReturn()), address(nvda).codehash, timelock);
+        assertFalse(l.isGenuine(address(nvda)));
+    }
+
+    function test_isGenuine_failsClosedOnDirtyAddressWord() public {
+        StockTokenAllowList l =
+            new StockTokenAllowList(address(new MockBeaconDirtyReturn()), address(nvda).codehash, timelock);
         assertFalse(l.isGenuine(address(nvda)));
     }
 

@@ -32,6 +32,16 @@ contract MockBeaconShortReturn {
     }
 }
 
+/// @notice Returns a full word with bits set above the address range: a dirty address.
+contract MockBeaconDirtyReturn {
+    function implementation() external pure returns (address) {
+        assembly {
+            mstore(0, not(0))
+            return(0, 32)
+        }
+    }
+}
+
 /// @notice Never returns; burns whatever gas it is given.
 contract MockBeaconBurnsGas {
     function implementation() external pure returns (address) {
