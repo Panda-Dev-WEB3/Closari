@@ -1,0 +1,26 @@
+name: deploy-site
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version-file: .bun-version }
+      - run: bun install --frozen-lockfile && bun run site:build && bun run site:check
+      - name: ssh key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: rsync
+        run: rsync -az --delete apps/site/dist/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/srv/closari/site/"
+      - name: reload caddy
+        run: ssh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "cd /srv/closari/infra && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile"

@@ -1,0 +1,25 @@
+name: closari
+services:
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CLOSARI_DOMAIN: ${CLOSARI_DOMAIN:?set CLOSARI_DOMAIN in infra/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/closari/site:/srv/site:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # M5: postgres (16 + TimescaleDB), redis, @closari/indexer, @closari/api
+  # M4: @closari/keeper, @closari/hermes (+ hot spare on separate infrastructure)
+  # M6: @closari/mcp (streamable HTTP)
+  # Each is added in its milestone with an image pinned by digest; none run in M1.
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
