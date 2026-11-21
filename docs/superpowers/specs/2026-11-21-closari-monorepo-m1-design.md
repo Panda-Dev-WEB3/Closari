@@ -37,22 +37,23 @@ Set up the single Closari repository and deliver milestone **M1** of the Backend
 <repo root>                 (repo root, branch main)
   package.json                      Bun workspaces: apps/*, packages/*, contracts; exact versions only
   bun.lock  .bun-version  .foundry-version  .nvmrc
-  DEPENDENCIES.lock                 submodule → commit table, checked in CI
+  DEPENDENCIES.lock                 forge-std commit, vendored-file sha256s, npm and CI pins; checked in CI
   AGENTS.md  CLAUDE.md              from the handoff, paths updated to this layout
   .claude/skills/closari-graphics/  from the handoff; media paths point at Closari-media
   contracts/                        Foundry project, package @closari/contracts
     foundry.toml                    solc 0.8.28, evm_version cancun, fuzz/invariant profiles
-    lib/                            git submodules: solady, pyth (interfaces), chainlink (interfaces), permit2 (interfaces)
+    lib/                            git submodule: forge-std only (Solady and the Pyth SDK come from npm, see §4)
+    src/vendor/                     vendored Chainlink and Permit2 interface files, pinned in DEPENDENCIES.lock
     src/interfaces/                 frozen I*.sol (§4.1)
     src/                            ExchangeCalendar, StockTokenAllowList, MarketFactory, lib/StrikeMath
     test/                           unit, fuzz, invariant, fork; test/mocks/
-    script/                         Deploy.s.sol (CREATE2, deterministic), ScanBeacon.s.sol
+    script/                         DeployLocal.s.sol (anvil only; factory address predicted from the deployer nonce)
     deployments/4663-assets.json    pinned token addresses + scan block
   packages/core/                    @closari/core
     src/abi/                        generated, typed `as const`
     src/calendar/                   NYSE 2026–27 tables, DST → UTC sessions
     src/strikes/                    TS reference for strike/edge generation
-    scripts/gen-abi.ts
+    scripts/abi.ts                  ABI write/check/freeze; scan-tokens.ts, chain-probe.ts, gen-vectors.ts
   apps/site/                        the website (moved, unchanged behaviour)
     src/  public/  index.html  package.json  vite config
     serve-preview.mjs
@@ -62,7 +63,7 @@ Set up the single Closari repository and deliver milestone **M1** of the Backend
     docker-compose.yml              Caddy (site) now; Postgres/Timescale, Redis, services as commented stubs
     Caddyfile
     README.md                       VPS hardening + deploy runbook
-  security/triage.md                Slither/Aderyn triage log
+  security/triage.md                static-analysis triage log (Slither; Aderyn retired, §7.1)
   docs/
     briefs/                         CLOSARI_Overview.md, CLOSARI_Backend.md (one copy each)
     handoff/                        Dashboard-Audit, DESIGN-AND-STATUS, art-direction, GRAPHICS, inspo-research, token-sources, Backend-Handoff.pdf
@@ -77,7 +78,9 @@ The site's runtime images and fonts are under `apps/site/public` and stay in git
 
 ## 4. Contracts (M1)
 
-Solidity 0.8.28, Foundry 1.8.1, Solady for math, clones, safe transfers, reentrancy guard, EIP-712, ECDSA and `Timelock`. Pyth `IPyth`/`PythStructs`, Chainlink `AggregatorV3Interface` and Permit2 `ISignatureTransfer` are vendored as interfaces only, at pinned commits.
+Solidity 0.8.28, Foundry 1.8.1, Solady for math, clones, safe transfers, safe casts, reentrancy guard, EIP-712, ECDSA and `Timelock`.
+
+**Dependencies (as built).** Solady 0.1.26 and the Pyth SDK 4.3.1 (`IPyth`, `PythStructs`, `MockPyth`; the old Pyth GitHub repo lacks `parsePriceFeedUpdatesUnique`) come from npm at exact versions, locked by `bun.lock` and listed in `DEPENDENCIES.lock`. `forge-std` is the only git submodule. Chainlink `AggregatorV3Interface` and Permit2 `ISignatureTransfer`/`IEIP712` are vendored files under `contracts/src/vendor/`, each pinned by upstream commit and sha256 in `DEPENDENCIES.lock` (the Chainlink repo cannot be checked out on Windows: paths too long). `scripts/checks/check-deps.ts` enforces the pins.
 
 ### 4.1 Frozen interfaces
 
@@ -96,13 +99,15 @@ Copied from Backend §3 with the audit amendments, then frozen:
 | `IStockToken` | ERC-8056 subset: `uiMultiplier`, `newUIMultiplier`, `effectiveAt`, `oraclePaused` |
 | `IUSDG` | EIP-3009 (`receiveWithAuthorization`, `cancelAuthorization`, `authorizationState`) + EIP-2612 `permit` |
 
-After M1, changing an interface needs an "Interface change" entry appended to this spec, stating the reason and which milestones it affects.
+Additions made for M1's needs and frozen with the rest: `IMarketFactory` `hasMarkets`, `predictMarket`, `template`, `setListingBounty`, `listingBounty` and events `MarketSkipped`, `GuardianVoided`, `TemplateSet`, `SkipSet`; `ILMSRMarket` `config()`, `state()`; `IHousePool` `maturedQueuePending()`; external `IStockToken`, `IBeacon`, `IUSDG`.
+
+After M1, changing an interface needs an "Interface change" entry appended to this spec, stating the reason and which milestones it affects, followed by `bun run abi:write && bun run abi:freeze && bun run abi:check`.
 
 ### 4.2 ExchangeCalendar
 
 - Stores `Session {openTs, closeTs}` per `dayId`. A day with no session is closed.
 - `setSessions` is `onlyTimelock`. It checks `openTs < closeTs`, `closeTs − openTs ∈ {12_600, 23_400}` and `openTs` within `dayId`'s UTC day, and reverts for any `dayId` that `factory.hasMarkets(dayId)` reports as listed.
-- **Calendar ↔ factory cycle:** the calendar takes the factory address as a constructor immutable. `Deploy.s.sol` deploys through CREATE2 with fixed salts, so the factory address is known before either contract exists.
+- **Calendar ↔ factory cycle:** the calendar takes the factory address as a constructor immutable. CREATE2 cannot break this cycle, because each contract's initcode would contain the other's address. Instead the factory address is predicted from the deployer's nonce (`vm.computeCreateAddress`) and the factory deploys last; `DeployLocal.s.sol` and the test fixture assert the prediction. The mainnet deployment method is decided in M8 (see Cross-milestone obligations).
 - `prevTradingDay(dayId, maxLookback)` walks back over closed days within the bound.
 
 ### 4.3 StockTokenAllowList
@@ -123,7 +128,8 @@ After M1, changing an interface needs an "Interface change" entry appended to th
   7. `!oraclePaused()`;
   8. no pending multiplier change with `effectiveAt ≤ closeTs + 3600`;
   9. the pool has no matured, unprocessed queue;
-  10. the previous trading day's close is final in the oracle, **or** more than 3 trading days have passed without a final close. In that case `refPythUpdate` is parsed and must have `|publishTime − now| ≤ 120 s` and `conf/price ≤ 0.5%`.
+  10. the reference walk looks back up to 3 trading days: a listed day that is not final reverts `PreviousDayNotFinal`; a final day with `dayVoid == NONE` gives the reference; a voided or unlisted day is skipped. If no reference is found, `refPythUpdate` is parsed and must have `|publishTime − now| ≤ 120 s` and `conf/price ≤ 0.5%`.
+  11. at least one template market opens, else `NoMarketsOpened` (see Interface change log).
 - **Snapshots into `DayInfo`:** `createdTs`, `openTs`, `closeTs`, `pythId`, `clFeed`, `multiplierSnapshot = uiMultiplier()` and `refPrice8`. Nothing in `DayInfo` is re-read later (I17).
 - **Reference price:** `ref = prevClose.price8 × currentMultiplier / prevSnapshot`. This is the factory's one allowed use of a multiplier in arithmetic, together with `_toTokenTerms` in M3 (I11).
 - **Strikes** come from `lib/StrikeMath.sol`: `roundHalfUp(ref × (10_000 + k) / 10_000, tickPrice8)`. Duplicates collapse, and the result must be strictly increasing. RANGE uses `edgeBps`, giving `n = edges + 1` buckets. UPDOWN has no edge at listing.
@@ -160,7 +166,7 @@ After M1, changing an interface needs an "Interface change" entry appended to th
 
 ## 5. `@closari/core`
 
-- **ABIs.** `scripts/gen-abi.ts` reads `contracts/out/**.json` for every `I*.sol` and deployable contract and writes `src/abi/*.ts` as `as const`, so viem types follow. A CI check fails if the generated files differ from a fresh generation.
+- **ABIs.** `scripts/abi.ts write` reads `contracts/out/**.json` for every `I*.sol` and deployable contract and writes `src/abi/*.ts` as `as const`, so viem types follow. A CI check fails if the generated files differ from a fresh generation.
 - **Calendar.** `src/calendar/` holds the NYSE 2026–2027 holiday and early-close tables from Overview §11 and Backend §1. It computes `openTs`/`closeTs` in UTC with DST via `Intl` (America/New_York), along with `dayId`, `haltTs = closeTs − 600`, and the fee-ramp start `haltTs − 1800`.
 - **Strikes.** `src/strikes/` is a bigint TS reference of `StrikeMath`. A shared JSON vector (`contracts/test/vectors/strikes.json`) is produced from it and checked by both `bun test` and a Foundry test that reads it with `vm.readFile`.
 
@@ -178,12 +184,12 @@ After M1, changing an interface needs an "Interface change" entry appended to th
 1. `forge fmt --check`, `bun run lint`, `bun run typecheck`
 2. `forge build --sizes`. Fails if any contract is over 24 KB
 3. Unit, fuzz (10k runs) and invariant (1,000 × 200) tests
-4. Fork tests at a pinned block on 4663. `RPC_4663` is a repository secret, defaulting to `https://rpc.mainnet.chain.robinhood.com`
+4. Fork tests on 4663. `RPC_4663` is a repository secret, defaulting to `https://rpc.mainnet.chain.robinhood.com`. The public RPC serves state only for recent blocks, so fork tests pin `FORK_BLOCK` only when it is set (which needs an archive RPC in `RPC_4663`) and otherwise run at `latest`
 5. `forge coverage`, 95% or more for line and branch coverage on `src/` (mocks and scripts excluded)
-6. Slither and Aderyn. Any high or medium finding fails the run unless it is listed in `security/triage.md`
+6. Slither (`--fail-medium`). Any high or medium finding fails the run unless it is listed in `security/triage.md`. Aderyn was retired upstream (its repository is archived as "Retired and no longer maintained"; the npm package and binaries are withdrawn), so CI runs Slither only. `scripts/checks/check-aderyn.ts` is kept for a supplied report. **M8 must choose a second static analyser.**
 7. `forge snapshot --check`. Fails on a gas regression over 5%
 8. Grep tests: `uiMultiplier`/`multiplierSnapshot` in arithmetic only where allowed (I11). The banned words from Overview §14 must not appear in identifiers or API strings
-9. Gitleaks. The submodule commits must match `DEPENDENCIES.lock`. The ABI-generation diff must be clean
+9. Gitleaks. The forge-std submodule commit, vendored-file hashes and npm pins must match `DEPENDENCIES.lock`. The ABI-generation diff must be clean
 10. `bun run site:build`
 
 Every action is pinned by commit SHA. `nightly.yml` runs 50k invariant runs. Renovate opens PRs weekly and nothing auto-merges.
@@ -204,14 +210,14 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 |---|---|
 | Calendar | Early closes 2026-11-27 and 2026-12-24. DST edges 2026-11-01 and 2027-03-14. Rejection of wrong lengths, out-of-day sessions and `openTs ≥ closeTs`. Lock on listed days. `onlyTimelock`. `prevTradingDay` across weekends and holidays |
 | Strikes | All 12 assets from the shared vector. Round-half-up at tick boundaries. Duplicate collapse. Strictly increasing. Multiplier rescale |
-| AllowList (fork) | `isGenuine` true for NVDA, SPY and SOXX; false for SBXSTK and ACME. Each launch feed has `decimals() == 8` and `description() == "RH<TICKER> / USD"` |
+| AllowList (fork) | `isGenuine` true for NVDA, SPY and SOXX; false for USDG and for a look-alike made by `vm.etch`-ing NVDA's 283-byte proxy code with a different embedded beacon (SBXSTK and ACME are not deployed by the stock-token factory and have no known address). Each launch feed has `decimals() == 8` and `description()` of `"RH<TICKER> / USD"` or `"Robinhood <TICKER> / USD"` (six launch feeds use the latter) |
 | `listDay` refusals | One test per check in §4.4, plus the second-listing refusal |
 | `listDay` success | Predicted addresses match. `DayInfo` snapshot fields are unaffected by later timelock edits (I17). 8 markets with the right `Config`/`b`. Refused budget skips only that market. Bounty credited once. `hasMarkets` is set |
 | Roles | Every external function is called by timelock, guardian and an arbitrary account, and the expected ones revert |
 | Fuzz | Strike generation vs the TS reference over random refs, ticks and bps. Random session validity |
 | Fork, environment | 4663 accepts Cancun bytecode (deploy a contract that uses `MCOPY`/`TSTORE`) |
 | TS (`bun test`) | Calendar sessions match the on-chain vectors. Strike reference matches the vector. Generated ABIs match `forge inspect` |
-| Deploy | `Deploy.s.sol` on anvil, and on an anvil fork of 4663 with mocks: calendar seeded, assets set, `listDay` succeeds. Post-deploy: the deployer holds no role |
+| Deploy | `DeployLocal.s.sol` (`CLOSARI_LOCAL_DEPLOY=true`) on anvil, and on an anvil fork of 4663 with mocks: calendar seeded, assets set, `listDay` succeeds. Post-deploy: the deployer holds no role |
 
 ## 9. Definition of done
 
@@ -219,7 +225,7 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 2. All interfaces in §4.1 are committed and frozen.
 3. `@closari/core` exports typed ABIs and the calendar and strike references.
 4. `apps/site` builds and serves the landing page and `/terminal/nvda`.
-5. `contracts/deployments/4663-assets.json` holds the twelve launch tokens plus SOXX, SBXSTK and ACME, with the scan block.
+5. `contracts/deployments/4663-assets.json` holds the sixteen pinned launch symbols (incl. SOXX), with the scan block. SBXSTK and ACME have no known address (§8).
 6. The anvil deploy script runs end to end.
 7. `infra/` and `deploy-site.yml` exist. Nothing is deployed.
 
@@ -228,8 +234,29 @@ Private repo `Panda-Dev-WEB3/closari` (name to confirm). Once the repo exists: b
 - **Bun** is not installed. It comes from the official installer, needs the user's approval, and the version is pinned in `.bun-version`.
 - **GitHub access** to Panda-Dev-WEB3 (see §2).
 - **Public-RPC rate limits** may throttle fork tests in CI. If so, a paid RPC URL goes into `RPC_4663`.
-- **Two unconfirmed (U) facts are checked live in M1:** that 4663 accepts Cancun, and that SBXSTK/ACME are not genuine. If either result differs from the brief, work stops and the finding is reported before the design is changed.
-- **Windows host:** Slither and Aderyn run in CI (Linux). Locally they run in Docker if needed.
+- **Two unconfirmed (U) facts are checked live in M1:** that 4663 accepts Cancun, and that SBXSTK/ACME are not genuine (resolved: they are not deployed by the stock-token factory, so the look-alike etch test replaces them, §8). If either result differs from the brief, work stops and the finding is reported before the design is changed.
+- **Windows host:** Slither runs in CI (Linux). Locally it runs in Docker if needed.
+
+## Cross-milestone obligations
+
+Found in the M1 final review. Each later milestone must honour these; the M1 factory relies on them.
+
+1. **M3 oracle:** it must finalise close results for listed days with zero or partially created markets. Otherwise the factory's reference walk (§4.4, check 10) reverts `PreviousDayNotFinal` and blocks listing for the next 3 trading days.
+2. **M3 `settleMarkets`:** it must skip `address(0)` entries in `DayInfo.markets`, and must treat `resolve`/`voidMarket` on an already-final market (for example after `guardianVoid`) as a no-op, so batches do not revert.
+3. **M7 pool:** refusals in `allocate` must revert with a non-empty custom error and must never wrap a gas-starved inner failure into one, because the factory treats empty revert data as `AllocationFailed` (and reverts the listing) while any non-empty revert skips the market.
+4. **M7 router:** `creditBounty` must never revert for an insufficient balance. It accrues a debt or caps the amount instead, so `listDay` and settlement cannot halt (I14).
+5. **`CA_AFTER = 3600`** must be identical in the factory, the market and the oracle. Move it into a shared constants library when M2 adds the market.
+6. **M2 market implementation:** block `initialize` on the implementation contract itself (its constructor marks it initialised).
+7. **Deploy ordering:** the pool, oracle and router take the nonce-predicted factory address, and the factory deploys last (§4.2). The M8 script deploys and initialises the Timelock atomically, with a 48 h delay.
+8. **Gas:** `listDay` measured 4.04M with mock markets (`security/triage.md`). Re-measure with the real `LMSRMarket` in M2 for the keeper's gas budget.
+
+## Open decisions before M2/M7
+
+- **(a) LMSR opening price (final-review #6).** Markets open at uniform prices. ABOVE ±2% and ±5% open at 0.50 against true chances of about 0.25 and 0.05, and the reviewer estimates about 1.8 budgets per token per day lost to the first arbitrageurs. Options: a factory-seeded prior (a `Config` change), near-money strikes only, or listing before the open only. Owner: the product owners. Must be decided before M2 freezes market initialisation.
+- **(b) Listing vs. sweep ordering before M7.** Either a pool view such as `pendingSweeps()`, or a keeper rule to list only after the previous day's sweeps and `processQueue`.
+- **(c) Early-close days.** No listing until the 13:00 feed behaviour is confirmed. Enforce it with guardian `setSkip` or in the M4 keeper.
+- **(d) Pyth reference on the listing path.** The reference is caller-chosen within 120 s (the non-Unique parse). Document it as accepted, or switch to the Unique parse in M3.
+- **(e) VPS.** Before M4, remove the `deploy` user from the `docker` group (use a forced-command/rrsync key) and add required reviewers to the `production` environment.
 
 ## Interface change log
 

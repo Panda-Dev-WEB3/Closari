@@ -6,5 +6,5 @@ Rules:
 - Keep paper fills and illustrative chart histories visibly labeled. The protocol is undeployed. A code change never authorizes publication, real transactions, contract deployment or a VPS deploy.
 - Private briefs and handoff docs stay outside `apps/site/public` and `apps/site/dist`.
 - Run `bun run site:build` and check phone and desktop after substantive site changes.
-- Contracts: follow `docs/briefs/CLOSARI_Backend.md` §3 and the frozen interfaces (`contracts/interfaces.lock.json`). Changing an interface needs an "Interface change" entry in the spec.
+- Contracts: follow `docs/briefs/CLOSARI_Backend.md` §3 and the frozen interfaces (`contracts/interfaces.lock.json`). Never edit an interface without first adding an entry to the spec's "Interface change log" (what, why, affected milestones); then run `bun run abi:write && bun run abi:freeze && bun run abi:check`. Never run `abi:freeze` to silence `abi:check` without that entry.
 - Graphics work uses the `closari-graphics` skill. Media masters are outside git in the local media folder.
