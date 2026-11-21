@@ -1,7 +1,7 @@
 {
   "chainId": 4663,
-  "scanBlock": 119867160,
-  "scannedAt": "2026-11-21T12:16:23.690Z",
+  "scanBlock": 119869116,
+  "scannedAt": "2026-11-21T12:19:53.156Z",
   "stockTokenFactory": "0x4783c67b63de2b358ac5951a7d41f47a38f3c046",
   "factoryTopic": "0xd9b0c6a1c0de228715ad0fa09f3259686ee84f8cc675e03ef7e47a9cdafa76d6",
   "beacon": "0xe10b6f6b275de231345c20d14ab812db62151b00",

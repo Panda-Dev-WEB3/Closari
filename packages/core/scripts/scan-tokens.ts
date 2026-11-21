@@ -56,6 +56,10 @@ async function main(): Promise<void> {
     for (const l of logs) tokens.push(getAddress(`0x${l.data.slice(26, 66)}`));
   }
 
+  const unique = [...new Set(tokens)];
+  tokens.length = 0;
+  tokens.push(...unique);
+
   const nvdaHash = keccak256((await client.getCode({ address: NVDA })) ?? "0x");
   if (nvdaHash !== EXPECTED_CODEHASH)
     throw new Error(`NVDA codehash ${nvdaHash} != ${EXPECTED_CODEHASH}`);
@@ -77,7 +81,15 @@ async function main(): Promise<void> {
     );
     for (const r of rows) {
       if (r.genuine) genuine++;
-      if (WANTED.includes(r.symbol) && !bySymbol[r.symbol]) bySymbol[r.symbol] = r.address;
+      if (!WANTED.includes(r.symbol)) continue;
+      if (!r.genuine)
+        throw new Error(`launch symbol ${r.symbol} on non-genuine token ${r.address}`);
+      const prior = bySymbol[r.symbol];
+      if (prior)
+        throw new Error(
+          `launch symbol ${r.symbol} is on two genuine tokens: ${prior} and ${r.address}`,
+        );
+      bySymbol[r.symbol] = r.address;
     }
   }
   const missing = WANTED.filter((s) => !bySymbol[s]);
