@@ -440,18 +440,23 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         lateBought[owner][k] = used;
     }
 
+    /// @dev One rounding, up, over the exact rational rate (M2 spec §5): fee = ⌈gross·num / (1e4·1e4·RAMP_WINDOW)⌉ with
+    ///      num = base·(1e4 − d)·RAMP_WINDOW + rampMax·elapsed·1e4. Neither the discount nor the ramp is floored first,
+    ///      so rounding always favours the market; the discount scales the base only (I15).
     function _fee(uint256 gross, address account) internal view returns (uint256) {
-        uint256 base = _m.baseFeeBps;
-        uint256 bps = base * (10_000 - _discount(account)) / 10_000 + _ramp();
-        return FixedPointMathLib.mulDivUp(gross, bps, 10_000);
+        uint256 w = Constants.RAMP_WINDOW;
+        uint256 baseNum = uint256(_m.baseFeeBps) * (10_000 - _discount(account)) * w;
+        uint256 rampNum = uint256(_m.rampMaxBps) * _rampElapsed() * 10_000;
+        return FixedPointMathLib.mulDivUp(gross, baseNum + rampNum, 10_000 * 10_000 * w);
     }
 
-    function _ramp() internal view returns (uint256) {
+    /// @dev Seconds into the ramp, clamped to [0, RAMP_WINDOW].
+    function _rampElapsed() internal view returns (uint256) {
         uint256 halt = _t.haltTs;
         uint256 start = halt - Constants.RAMP_WINDOW;
-        if (block.timestamp < start) return 0;
-        if (block.timestamp >= halt) return _m.rampMaxBps;
-        return uint256(_m.rampMaxBps) * (block.timestamp - start) / Constants.RAMP_WINDOW;
+        if (block.timestamp <= start) return 0;
+        if (block.timestamp >= halt) return Constants.RAMP_WINDOW;
+        return block.timestamp - start;
     }
 
     /// @dev Gas-capped, returndata-bounded read. Any failure, a missing contract or a value above the cap counts as 0,

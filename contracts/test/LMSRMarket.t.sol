@@ -140,25 +140,61 @@ contract LMSRMarketTest is MarketFixture {
 
     // ---------------------------------------------------------------- fees
 
+    /// @dev The exact rational fee, rounded once, up (M2 spec §5): base·(1e4 − d)/1e4 + rampMax·elapsed/1800 bps.
+    function _feeExact(uint256 g, uint256 base, uint256 d, uint256 rampMax, uint256 elapsed)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 num = base * (10_000 - d) * 1_800 + rampMax * elapsed * 10_000;
+        uint256 den = uint256(10_000) * 10_000 * 1_800;
+        return (g * num + den - 1) / den;
+    }
+
     function test_ramp_shapeAndCap() public {
         (uint256 g0, uint256 f0) = m.quoteBuy(0, 100e6, alice);
         assertEq(f0, (g0 * 50 + 9_999) / 10_000);
+        assertEq(f0, _feeExact(g0, 50, 0, 250, 0));
+        vm.warp(HALT - 1_800); // the ramp's first second still charges base only
+        (uint256 gs, uint256 fs) = m.quoteBuy(0, 100e6, alice);
+        assertEq(fs, _feeExact(gs, 50, 0, 250, 0));
         vm.warp(HALT - 900); // halfway through the ramp: 50 + 125
         (uint256 g1, uint256 f1) = m.quoteBuy(0, 100e6, alice);
         assertEq(f1, (g1 * 175 + 9_999) / 10_000);
         vm.warp(HALT - 1);
         (uint256 g2, uint256 f2) = m.quoteBuy(0, 100e6, alice);
-        uint256 rampBps = uint256(250) * 1_799 / 1_800; // integer floor, as the contract computes it
-        assertEq(f2, (g2 * (50 + rampBps) + 9_999) / 10_000);
+        assertEq(f2, _feeExact(g2, 50, 0, 250, 1_799)); // 50 + 250·1799/1800 bps, not floored to 299
+        assertGt(f2, (g2 * 299 + 9_999) / 10_000);
     }
 
     function test_discount_baseOnly_I15() public {
         stakingMock.set(alice, 3_000);
         (uint256 g, uint256 f) = m.quoteBuy(0, 100e6, alice);
         assertEq(f, (g * 35 + 9_999) / 10_000);
+        assertEq(f, _feeExact(g, 50, 3_000, 250, 0));
         vm.warp(HALT - 900);
         (g, f) = m.quoteBuy(0, 100e6, alice);
         assertEq(f, (g * (35 + 125) + 9_999) / 10_000); // ramp never discounted
+        assertEq(f, _feeExact(g, 50, 3_000, 250, 900));
+    }
+
+    /// A 1-bp discount on a 50-bp base charges 49.995 bps, rounded up once: never 49 bps (no 1-bp jump).
+    function test_discount_oneBp_noFloorJump() public {
+        stakingMock.set(alice, 1);
+        (uint256 g, uint256 f) = m.quoteBuy(0, 100e6, alice);
+        (uint256 g0, uint256 f0) = m.quoteBuy(0, 100e6, bob); // bob holds no discount
+        assertEq(g, g0);
+        assertEq(f, _feeExact(g, 50, 1, 250, 0));
+        assertGe(f * 10_000_000, g * 49_995); // ≥ the exact 49.995-bp value
+        assertGt(f, (g * 49 + 9_999) / 10_000); // strictly above a floored 49-bp rate
+        assertLe(f0 - f, g * 5 / 10_000_000 + 1); // the discount is worth 0.005 bp, not 1 bp
+        // the same holds on the sell side, which shares `_fee`
+        _buy(m, alice, 0, 100e6);
+        (uint256 gs, uint256 fsell) = m.quoteSell(0, 50e6, alice);
+        assertEq(fsell, _feeExact(gs, 50, 1, 250, 0));
+        uint256 escrow = m.feeEscrow();
+        _sell(m, alice, 0, 50e6);
+        assertEq(m.feeEscrow() - escrow, fsell);
     }
 
     function test_discount_brokenStakingIsZero() public {

@@ -79,9 +79,9 @@ As in Backend §3.4, written from the published formulas on Solady `expWad`/`lnW
 
 ## 5. Fees, discounts, ramp
 
-- `feeBps(t, account) = base × (10_000 − discount) / 10_000 + ramp(t)`.
-- `ramp(t) = 0` before `haltTs − 1800`, then linear to `rampMax` at `haltTs`.
-- `fee = ceil(gross × feeBps / 10_000)`. On a buy the trader pays `gross + fee`, and that total must be `≤ maxTotal`. On a sell they receive `gross − fee`, which must be `≥ minNet`.
+- The fee rate is the exact rational `feeBps(t, account) = base × (10_000 − discount) / 10_000 + rampMax × elapsed / 1800`, where `elapsed = clamp(t − (haltTs − 1800), 0, 1800)`. So the ramp is 0 before `haltTs − 1800`, then linear to `rampMax` at `haltTs`.
+- The fee is rounded **once**, up, over that exact rate: `num = base × (10_000 − discount) × 1800 + rampMax × elapsed × 10_000`, `fee = ceil(gross × num / (10_000 × 10_000 × 1800))`. Neither the discounted base nor the ramp is floored first, so a 1-bp discount on a 50-bp base charges 49.995 bps (not 49), and rounding always favours the market. `quoteBuy`/`quoteSell` use the same function.
+- On a buy the trader pays `gross + fee`, and that total must be `≤ maxTotal`. On a sell they receive `gross − fee`, which must be `≥ minNet`.
 - **Discount:** read with a gas-capped `staticcall` (50k) to `staking.discountBps(account)`.
   - Any failure, a zero `staking` address, or a value above 3,000 counts as 0. A broken staking contract can never stop trading.
   - Discounts reduce `base` only (I15).
