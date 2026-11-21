@@ -969,5 +969,10 @@ export const marketFactoryAbi = [
     "type": "error",
     "name": "ZeroAddress",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroMultiplier",
+    "inputs": []
   }
 ] as const;

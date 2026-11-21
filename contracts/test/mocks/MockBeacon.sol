@@ -39,3 +39,18 @@ contract MockBeaconBurnsGas {
         return address(0);
     }
 }
+
+/// @notice Spends about 120k gas before answering: a costlier issuer beacon that must still be accepted.
+contract MockBeaconCostly {
+    address internal immutable _impl;
+
+    constructor(address impl) {
+        _impl = impl;
+    }
+
+    function implementation() external view returns (address) {
+        uint256 start = gasleft();
+        while (start - gasleft() < 120_000) {}
+        return _impl;
+    }
+}

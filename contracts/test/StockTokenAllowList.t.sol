@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {StockTokenAllowList} from "../src/StockTokenAllowList.sol";
 import {IStockTokenAllowList} from "../src/interfaces/IStockTokenAllowList.sol";
 import {MockAggregator} from "./mocks/MockAggregator.sol";
-import {MockBeacon, MockBeaconBurnsGas, MockBeaconShortReturn} from "./mocks/MockBeacon.sol";
+import {MockBeacon, MockBeaconBurnsGas, MockBeaconCostly, MockBeaconShortReturn} from "./mocks/MockBeacon.sol";
 import {MockStockToken, MockStockTokenLookalike} from "./mocks/MockStockToken.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -68,6 +68,13 @@ contract StockTokenAllowListTest is Test {
         StockTokenAllowList l =
             new StockTokenAllowList(address(new MockBeaconBurnsGas()), address(nvda).codehash, timelock);
         assertFalse(l.isGenuine(address(nvda)));
+    }
+
+    function test_isGenuine_toleratesCostlierBeacon() public {
+        address impl = makeAddr("implementation");
+        StockTokenAllowList l =
+            new StockTokenAllowList(address(new MockBeaconCostly(impl)), address(nvda).codehash, timelock);
+        assertTrue(l.isGenuine(address(nvda)));
     }
 
     function test_setAsset_onlyTimelock() public {

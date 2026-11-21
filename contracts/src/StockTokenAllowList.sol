@@ -21,10 +21,11 @@ contract StockTokenAllowList is IStockTokenAllowList {
         timelock = timelock_;
     }
 
-    /// @dev Fails closed: any malformed, short, dirty or gas-exhausting beacon response returns false.
+    /// @dev Fails closed: any malformed, short, dirty or gas-exhausting beacon response returns false. The 200k gas
+    ///      cap leaves room for a costlier issuer beacon; this contract is immutable and must not brick listings.
     function isGenuine(address token) public view returns (bool) {
         if (token.code.length == 0 || token.codehash != PROXY_CODEHASH) return false;
-        (bool ok, bytes memory ret) = BEACON.staticcall{gas: 50_000}(abi.encodeCall(IBeacon.implementation, ()));
+        (bool ok, bytes memory ret) = BEACON.staticcall{gas: 200_000}(abi.encodeCall(IBeacon.implementation, ()));
         if (!ok || ret.length < 32) return false;
         uint256 word = abi.decode(ret, (uint256));
         if (word >> 160 != 0) return false;
