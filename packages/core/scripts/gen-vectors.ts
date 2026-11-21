@@ -1,6 +1,7 @@
 // Writes the shared test vectors the Solidity tests read. Re-run after changing a reference.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { COVERED_FROM, COVERED_TO, sessionsBetween } from "../src/calendar/nyse.ts";
 import { LAUNCH_EDGE_BPS, LAUNCH_STRIKE_BPS, positional } from "../src/strikes/strikes.ts";
 
 const VECTORS = join(import.meta.dir, "..", "..", "..", "contracts", "test", "vectors");
@@ -57,3 +58,19 @@ writeFileSync(
   `${JSON.stringify({ count: cases.length, cases }, null, 2)}\n`,
 );
 console.log(`strikes.json: ${cases.length} cases`);
+
+const sessions = sessionsBetween(COVERED_FROM, COVERED_TO);
+writeFileSync(
+  join(VECTORS, "calendar.json"),
+  `${JSON.stringify(
+    {
+      count: sessions.length,
+      dayIds: sessions.map((s) => s.dayId),
+      openTs: sessions.map((s) => s.openTs),
+      closeTs: sessions.map((s) => s.closeTs),
+    },
+    null,
+    2,
+  )}\n`,
+);
+console.log(`calendar.json: ${sessions.length} sessions`);
