@@ -37,6 +37,15 @@ runs = 512
 runs = 50000
 depth = 200
 
+# Coverage instruments every opcode: run lighter fuzz/invariant campaigns there. The full-strength campaigns run in
+# `test` (and nightly).
+[profile.coverage.fuzz]
+runs = 256
+
+[profile.coverage.invariant]
+runs = 32
+depth = 100
+
 [rpc_endpoints]
 rh = "${RPC_4663}"
 

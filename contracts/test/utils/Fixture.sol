@@ -64,11 +64,16 @@ abstract contract Fixture is Test {
         pool = new MockHousePool();
         oracle = new MockSettlementOracle();
         router = new MockFeeRouter();
-        marketImpl = new MockMarket();
+        marketImpl = MockMarket(_impl());
         _deployCore(address(pyth));
         _seedCalendar();
         _setNvda(PYTH_ID, true, BUDGET);
         vm.deal(lister, 1 ether);
+    }
+
+    /// @dev The market implementation the factory clones. M1 tests keep the mock; integration tests override it.
+    function _impl() internal virtual returns (address) {
+        return address(new MockMarket());
     }
 
     /// @dev Calendar needs the factory address and the factory needs the calendar: predict by nonce.

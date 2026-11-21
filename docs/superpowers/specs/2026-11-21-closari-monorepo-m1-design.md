@@ -244,10 +244,10 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 2. **M3 `settleMarkets`:** it must skip `address(0)` entries in `DayInfo.markets`, and must treat `resolve`/`voidMarket` on an already-final market (for example after `guardianVoid`) as a no-op, so batches do not revert.
 3. **M7 pool:** refusals in `allocate` must revert with a non-empty custom error and must never wrap a gas-starved inner failure into one, because the factory treats empty revert data as `AllocationFailed` (and reverts the listing) while any non-empty revert skips the market.
 4. **M7 router:** `creditBounty` must never revert for an insufficient balance. It accrues a debt or caps the amount instead, so `listDay` and settlement cannot halt (I14).
-5. **`CA_AFTER = 3600`** must be identical in the factory, the market and the oracle. Move it into a shared constants library when M2 adds the market.
-6. **M2 market implementation:** block `initialize` on the implementation contract itself (its constructor marks it initialised).
+5. **`CA_AFTER = 3600`** must be identical in the factory, the market and the oracle. Move it into a shared constants library when M2 adds the market. — done in M2 (Constants.sol / LMSRMarket constructor / triage.md)
+6. **M2 market implementation:** block `initialize` on the implementation contract itself (its constructor marks it initialised). — done in M2 (Constants.sol / LMSRMarket constructor / triage.md)
 7. **Deploy ordering:** the pool, oracle and router take the nonce-predicted factory address, and the factory deploys last (§4.2). The M8 script deploys and initialises the Timelock atomically, with a 48 h delay.
-8. **Gas:** `listDay` measured 4.04M with mock markets (`security/triage.md`). Re-measure with the real `LMSRMarket` in M2 for the keeper's gas budget.
+8. **Gas:** `listDay` measured 4.04M with mock markets (`security/triage.md`). Re-measure with the real `LMSRMarket` in M2 for the keeper's gas budget. — done in M2 (Constants.sol / LMSRMarket constructor / triage.md)
 9. **M8 deploy:** `PriorMath` is a linked library (`raw`, `floorNormalize`, `liquidity` are public, to keep `MarketFactory` under 22 KB). The mainnet script must deploy it and link it into `MarketFactory`; `forge script` runs need `--sender`.
 
 ## Open decisions before M2/M7

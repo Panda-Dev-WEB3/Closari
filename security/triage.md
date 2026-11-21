@@ -19,3 +19,16 @@ Every Slither finding (Aderyn is retired upstream) at medium or above is either 
 | `listDay` (8 markets, mock pool), `test_firstListing_createsEightConfiguredMarkets` | 4,037,449 (`.gas-snapshot`) | ≈ 1.6M |
 
 Forge's per-test gas excludes `setUp`, so this figure is the `listDay` call itself plus the mock market's storage-heavy `initialize` (the mock stores the whole `Config`, including the edges array, for test assertions), plus the test body's own calls (building the Pyth update, predicting addresses, assertions). It exceeds the brief's estimate and is recorded so later changes are compared against the snapshot (`snapshot:check`, tolerance 5). Re-measure with the real `LMSRMarket` in M2 for the keeper's gas budget.
+
+## Gas (M2)
+
+Measured 2026-11-21.
+
+| Measurement | Gas | Target |
+|---|---|---|
+| `listDay` (8 real `LMSRMarket` clones, mock pool), `MarketFactoryLMSR.t.sol` `test_listDay_gas_realMarket` (`gasleft()` around `_listFri()`) | 5,592,172 | < 8,000,000 (asserted) |
+| `buy` of 10 shares, first-time buyer, cold storage (`vm.cool` on market, USDG, NVDA and pool), real USDG and NVDA on a 4663 fork, `test/fork/MarketFork.t.sol` | 261,725 | 180,000 (reported, not asserted; sanity bound 300,000 asserted) |
+
+`listDay` rose from 4.04M (mock market) to 5.59M: each real clone stores its prior, edges, virtual quantities and checkpoints at `initialize`. The keeper's gas budget must cover this per token and day.
+
+Buy target missed by 81,725; CA stop = 4 cold staticcalls; decision deferred to M8 (M2 spec §13). The figure also includes the mock pool's `onMark` writes (one of them a first write to a zero slot), which the M7 pool replaces.

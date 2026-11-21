@@ -135,7 +135,7 @@ with their own keys.
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1** | Monorepo, CI, `ExchangeCalendar`, `StockTokenAllowList`, `MarketFactory`, frozen interfaces, generated ABIs | ✅ built and reviewed |
-| M2 | `LMSRMarket` trading: math, rounding, fees and ramp, halt, gasless entry (EIP-3009, Permit2) | next |
+| **M2** | `LMSRMarket` trading: math, rounding, fees and ramp, halt, gasless entry (EIP-3009, Permit2) | ✅ built, in review |
 | M3 | `SettlementOracle`: Pyth tiers, Chainlink cross-check, voids, claims | |
 | M4 | Keeper and Hermes fetcher | |
 | M5 | Indexer and public API | |
