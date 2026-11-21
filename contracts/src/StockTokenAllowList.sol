@@ -21,19 +21,21 @@ contract StockTokenAllowList is IStockTokenAllowList {
         timelock = timelock_;
     }
 
+    /// @dev Fails closed: any malformed, short, dirty or gas-exhausting beacon response returns false.
     function isGenuine(address token) public view returns (bool) {
         if (token.code.length == 0 || token.codehash != PROXY_CODEHASH) return false;
-        try IBeacon(BEACON).implementation() returns (address impl) {
-            return impl != address(0);
-        } catch {
-            return false;
-        }
+        (bool ok, bytes memory ret) = BEACON.staticcall{gas: 50_000}(abi.encodeCall(IBeacon.implementation, ()));
+        if (!ok || ret.length < 32) return false;
+        uint256 word = abi.decode(ret, (uint256));
+        if (word >> 160 != 0) return false;
+        return word != 0;
     }
 
     function setAsset(address token, Asset calldata a) external {
         if (msg.sender != timelock) revert NotTimelock();
         if (!isGenuine(token)) revert NotGenuine(token);
         if (a.pythId == bytes32(0) || a.tickPrice8 == 0) revert BadAsset();
+        if (a.clFeed.code.length == 0) revert BadAsset();
         uint8 d = AggregatorV3Interface(a.clFeed).decimals();
         if (d != 8) revert BadFeedDecimals(d);
         _assets[token] = a;

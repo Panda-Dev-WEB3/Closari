@@ -4,7 +4,7 @@ pragma solidity 0.8.28;
 import {StockTokenAllowList} from "../src/StockTokenAllowList.sol";
 import {IStockTokenAllowList} from "../src/interfaces/IStockTokenAllowList.sol";
 import {MockAggregator} from "./mocks/MockAggregator.sol";
-import {MockBeacon} from "./mocks/MockBeacon.sol";
+import {MockBeacon, MockBeaconBurnsGas, MockBeaconShortReturn} from "./mocks/MockBeacon.sol";
 import {MockStockToken, MockStockTokenLookalike} from "./mocks/MockStockToken.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -53,6 +53,23 @@ contract StockTokenAllowListTest is Test {
         assertFalse(list.isGenuine(address(nvda)));
     }
 
+    function test_isGenuine_failsClosedOnShortReturn() public {
+        StockTokenAllowList l =
+            new StockTokenAllowList(address(new MockBeaconShortReturn()), address(nvda).codehash, timelock);
+        assertFalse(l.isGenuine(address(nvda)));
+    }
+
+    function test_isGenuine_failsClosedOnCodelessBeacon() public {
+        StockTokenAllowList l = new StockTokenAllowList(makeAddr("codelessBeacon"), address(nvda).codehash, timelock);
+        assertFalse(l.isGenuine(address(nvda)));
+    }
+
+    function test_isGenuine_failsClosedOnGasBurningBeacon() public {
+        StockTokenAllowList l =
+            new StockTokenAllowList(address(new MockBeaconBurnsGas()), address(nvda).codehash, timelock);
+        assertFalse(l.isGenuine(address(nvda)));
+    }
+
     function test_setAsset_onlyTimelock() public {
         vm.expectRevert(IStockTokenAllowList.NotTimelock.selector);
         list.setAsset(address(nvda), _asset(address(feed8)));
@@ -80,6 +97,16 @@ contract StockTokenAllowListTest is Test {
         vm.prank(timelock);
         vm.expectRevert(abi.encodeWithSelector(IStockTokenAllowList.BadFeedDecimals.selector, uint8(18)));
         list.setAsset(address(nvda), _asset(address(feed18)));
+    }
+
+    function test_setAsset_rejectsCodelessFeed() public {
+        vm.prank(timelock);
+        vm.expectRevert(IStockTokenAllowList.BadAsset.selector);
+        list.setAsset(address(nvda), _asset(address(0)));
+
+        vm.prank(timelock);
+        vm.expectRevert(IStockTokenAllowList.BadAsset.selector);
+        list.setAsset(address(nvda), _asset(makeAddr("eoaFeed")));
     }
 
     function test_setAsset_storesAndEmits() public {

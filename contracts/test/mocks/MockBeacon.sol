@@ -22,3 +22,20 @@ contract MockBeacon {
         return _impl;
     }
 }
+
+/// @notice Returns 31 bytes of return data: shorter than an ABI word.
+contract MockBeaconShortReturn {
+    function implementation() external pure returns (address) {
+        assembly {
+            return(0, 31)
+        }
+    }
+}
+
+/// @notice Never returns; burns whatever gas it is given.
+contract MockBeaconBurnsGas {
+    function implementation() external pure returns (address) {
+        while (true) {}
+        return address(0);
+    }
+}
