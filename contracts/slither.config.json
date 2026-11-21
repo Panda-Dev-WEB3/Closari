@@ -1,0 +1,6 @@
+{
+  "filter_paths": "(lib/|node_modules/|test/|script/|src/vendor/)",
+  "exclude_informational": true,
+  "exclude_low": true,
+  "foundry_out_directory": "out"
+}

@@ -125,6 +125,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
 
     // ------------------------------------------------------------------ listing
 
+    // slither-disable-next-line reentrancy-eth -- triaged, security/triage.md T1
     function listDay(address token, uint32 dayId, bytes[] calldata refPythUpdate)
         external
         payable
@@ -227,6 +228,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
             int64[] memory edge = new int64[](1);
             edge[0] = strikes[i];
             Spec memory sp = Spec(token, dayId, i, Kind.ABOVE, edge, a.budgetAbove);
+            // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
             if (strikes[i] == 0) _skipped(sp, SKIP_COLLAPSED);
             else markets[i] = _open(sp);
         }
@@ -234,6 +236,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         if (eb.length != 0) {
             int64[] memory edges = StrikeMath.compact(StrikeMath.positional(ref8, eb, a.tickPrice8));
             Spec memory sp = Spec(token, dayId, idx, Kind.RANGE, edges, a.budgetRange);
+            // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
             if (edges.length == 0) _skipped(sp, SKIP_NO_EDGE);
             else markets[idx] = _open(sp);
             ++idx;
@@ -242,8 +245,10 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
     }
 
     function _open(Spec memory sp) internal returns (address m) {
+        // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
         uint8 n = sp.kind == Kind.RANGE ? uint8(sp.edges.length + 1) : 2;
         uint256 bWad = _bWad(sp.budget, n);
+        // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
         if (bWad == 0) {
             _skipped(sp, SKIP_BUDGET);
             return address(0);
@@ -258,6 +263,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
             _skipped(sp, SKIP_POOL_REFUSED);
             return address(0);
         }
+        // slither-disable-next-line unused-return -- triaged, security/triage.md T4
         LibClone.cloneDeterministic(marketImpl, salt);
         ILMSRMarket(m).initialize(_config(sp, n, bWad), address(pool), address(oracle), address(router), staking);
     }
@@ -281,6 +287,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
     /// @dev b = floor(budget × 1e18 / (lnWad(n) + 1)) base units, so b·ln n ≤ budget; returned in WAD (× 1e12).
     function _bWad(uint96 budget, uint8 n) internal pure returns (uint256) {
         uint256 lnN = uint256(FixedPointMathLib.lnWad(int256(uint256(n) * 1e18)));
+        // slither-disable-next-line divide-before-multiply -- triaged, security/triage.md T2
         uint256 b = uint256(budget) * 1e18 / (lnN + 1);
         if (b < B_MIN || b > B_MAX) return 0;
         return b * 1e12;

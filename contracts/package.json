@@ -10,7 +10,7 @@
     "fmt:check": "forge fmt --check",
     "snapshot": "forge snapshot --no-match-path 'test/fork/*' --no-match-test 'testFuzz|invariant'",
     "snapshot:check": "forge snapshot --check --tolerance 5 --no-match-path 'test/fork/*' --no-match-test 'testFuzz|invariant'",
-    "coverage": "forge coverage --report lcov --no-match-path 'test/fork/*' --no-match-coverage '(test|script|vendor)/'"
+    "coverage": "forge coverage --ir-minimum --report lcov --no-match-path 'test/fork/*' --no-match-coverage '(test|script|vendor)/'"
   },
   "devDependencies": {
     "@pythnetwork/pyth-sdk-solidity": "4.3.1",

@@ -1,0 +1,93 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { submodules: recursive, fetch-depth: 0 }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version-file: .bun-version }
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with: { version: v1.8.1 }
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test scripts/checks packages
+      - run: bun run checks
+      - run: bun run contracts:build && bun run abi:check
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --redact --verbose
+
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { submodules: recursive }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version-file: .bun-version }
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with: { version: v1.8.1 }
+      - run: bun install --frozen-lockfile
+      - run: forge fmt --check
+        working-directory: contracts
+      - run: forge build --sizes
+        working-directory: contracts
+      - run: bun run contracts:test
+      - run: bun run --cwd contracts snapshot:check
+      - run: bun run --cwd contracts coverage && bun run scripts/checks/check-coverage.ts contracts/lcov.info
+
+  fork:
+    runs-on: ubuntu-24.04
+    env:
+      RPC_4663: ${{ secrets.RPC_4663 != '' && secrets.RPC_4663 || 'https://rpc.mainnet.chain.robinhood.com' }}
+      FORK_BLOCK: ${{ vars.FORK_BLOCK }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { submodules: recursive }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version-file: .bun-version }
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with: { version: v1.8.1 }
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/core probe
+      - run: bun run contracts:test:fork
+
+  static-analysis:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { submodules: recursive }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version-file: .bun-version }
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with: { version: v1.8.1 }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with: { python-version: "3.12" }
+      - run: bun install --frozen-lockfile
+      - run: pip install slither-analyzer==0.11.6 solc-select==1.0.4 && solc-select install 0.8.28 && solc-select use 0.8.28
+      - run: slither . --config-file slither.config.json --fail-medium
+        working-directory: contracts
+
+  site:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version-file: .bun-version }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc }
+      - run: bun install --frozen-lockfile
+      - run: bun run site:build
+      - run: bun run site:check
+      - name: no private docs in the web root
+        run: "! grep -rilE 'CLOSARI_(Backend|Overview)|Dashboard-Audit' apps/site/dist"
