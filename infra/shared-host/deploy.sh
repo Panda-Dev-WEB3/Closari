@@ -70,7 +70,7 @@ cast block-number --rpc-url "$RPC" >/dev/null
 
 if [ "$(cast nonce "$DEPLOYER" --rpc-url "$RPC")" = "0" ]; then
   log "deploy M1 contracts (DeployLocal, mocks)"
-  (cd contracts && CLOSARI_LOCAL_DEPLOY=true forge script script/DeployLocal.s.sol --rpc-url "$RPC" --broadcast) |
+  (cd contracts && CLOSARI_LOCAL_DEPLOY=true forge script script/DeployLocal.s.sol --rpc-url "$RPC" --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80) |
     tee "$STATE/deploy.log"
 else
   echo "devnet already deployed (deployer nonce > 0); see $STATE/deploy.log"

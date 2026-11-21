@@ -194,7 +194,7 @@ Local deploy (anvil only; mocks are never deployed to 4663). The script refuses 
 and the RPC is an anvil node (31337, or an anvil fork of 4663):
 
     anvil --port 8545                                              # or: anvil --fork-url "$RPC_4663" --port 8546
-    cd contracts && CLOSARI_LOCAL_DEPLOY=true forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+    cd contracts && CLOSARI_LOCAL_DEPLOY=true forge script script/DeployLocal.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
 Frozen interfaces (`contracts/src/interfaces`, hashes in `contracts/interfaces.lock.json`): never edit an interface
 without first appending an entry to the "Interface change log" in

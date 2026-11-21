@@ -11,10 +11,10 @@ import {IStockTokenAllowList} from "./interfaces/IStockTokenAllowList.sol";
 import {IStockToken} from "./interfaces/external/IStockToken.sol";
 import {Constants} from "./lib/Constants.sol";
 import {PriceMath} from "./lib/PriceMath.sol";
+import {PriorMath} from "./lib/PriorMath.sol";
 import {StrikeMath} from "./lib/StrikeMath.sol";
 import {IPyth} from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
 import {PythStructs} from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
-import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 import {ReentrancyGuard} from "solady/utils/ReentrancyGuard.sol";
 import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
@@ -43,6 +43,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         Kind kind;
         int64[] edges;
         uint96 budget;
+        uint16 volBps;
     }
 
     error ZeroAddress();
@@ -231,7 +232,7 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         for (uint256 i; i < nAbove; ++i) {
             int64[] memory edge = new int64[](1);
             edge[0] = strikes[i];
-            Spec memory sp = Spec(token, dayId, i, Kind.ABOVE, edge, a.budgetAbove);
+            Spec memory sp = Spec(token, dayId, i, Kind.ABOVE, edge, a.budgetAbove, a.volBps);
             // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
             if (strikes[i] == 0) _skipped(sp, SKIP_COLLAPSED);
             else markets[i] = _open(sp);
@@ -239,14 +240,14 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         uint256 idx = nAbove;
         if (eb.length != 0) {
             int64[] memory edges = StrikeMath.compact(StrikeMath.positional(ref8, eb, a.tickPrice8));
-            Spec memory sp = Spec(token, dayId, idx, Kind.RANGE, edges, a.budgetRange);
+            Spec memory sp = Spec(token, dayId, idx, Kind.RANGE, edges, a.budgetRange, a.volBps);
             // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
             if (edges.length == 0) _skipped(sp, SKIP_NO_EDGE);
             else markets[idx] = _open(sp);
             ++idx;
         }
         if (upDown) {
-            Spec memory sp = Spec(token, dayId, idx, Kind.UPDOWN, new int64[](0), a.budgetUpDown);
+            Spec memory sp = Spec(token, dayId, idx, Kind.UPDOWN, new int64[](0), a.budgetUpDown, a.volBps);
             // An UP/DOWN market prices the move from the open, so it is never listed once the session has opened.
             if (block.timestamp >= _days[token][dayId].openTs) _skipped(sp, SKIP_AFTER_OPEN);
             else markets[idx] = _open(sp);
@@ -261,11 +262,10 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
     }
 
     function _open(Spec memory sp) internal returns (address m) {
+        uint256[] memory prior = _prior(sp);
+        uint256 b = PriorMath.liquidity(sp.budget, prior);
         // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
-        uint8 n = sp.kind == Kind.RANGE ? uint8(sp.edges.length + 1) : 2;
-        uint256 bWad = _bWad(sp.budget, n);
-        // slither-disable-next-line incorrect-equality -- triaged, security/triage.md T3
-        if (bWad == 0) {
+        if (b == 0) {
             _skipped(sp, SKIP_BUDGET);
             return address(0);
         }
@@ -281,15 +281,20 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         }
         // slither-disable-next-line unused-return -- triaged, security/triage.md T4
         LibClone.cloneDeterministic(marketImpl, salt);
-        ILMSRMarket(m).initialize(_config(sp, n, bWad), address(pool), address(oracle), address(router), staking);
+        ILMSRMarket(m)
+            .initialize(_config(sp, prior, b * 1e12), address(pool), address(oracle), address(router), staking);
     }
 
-    function _config(Spec memory sp, uint8 n, uint256 bWad) internal view returns (ILMSRMarket.Config memory c) {
+    function _config(Spec memory sp, uint256[] memory prior, uint256 bWad)
+        internal
+        view
+        returns (ILMSRMarket.Config memory c)
+    {
         DayInfo storage day = _days[sp.token][sp.dayId];
         c.token = sp.token;
         c.dayId = sp.dayId;
         c.kind = sp.kind;
-        c.n = n;
+        c.n = uint8(prior.length);
         c.edges = sp.edges;
         c.createdTs = day.createdTs;
         c.openTs = day.openTs;
@@ -298,27 +303,14 @@ contract MarketFactory is IMarketFactory, ReentrancyGuard {
         c.multiplierSnapshot = day.multiplierSnapshot;
         c.bWad = bWad;
         c.budget = sp.budget;
-        c.priorWad = _uniformPrior(n);
+        c.priorWad = prior;
         c.baseFeeBps = _baseFeeBps;
         c.rampMaxBps = _rampMaxBps;
     }
 
-    /// @dev Temporary uniform opening prices (Σ = 1e18); the dust goes to outcome 0.
-    function _uniformPrior(uint8 n) internal pure returns (uint256[] memory p) {
-        p = new uint256[](n);
-        for (uint256 i; i < n; ++i) {
-            p[i] = 1e18 / n;
-        }
-        p[0] += 1e18 - (1e18 / n) * n;
-    }
-
-    /// @dev b = floor(budget × 1e18 / (lnWad(n) + 1)) base units, so b·ln n ≤ budget; returned in WAD (× 1e12).
-    function _bWad(uint96 budget, uint8 n) internal pure returns (uint256) {
-        uint256 lnN = uint256(FixedPointMathLib.lnWad(int256(uint256(n) * 1e18)));
-        // slither-disable-next-line divide-before-multiply -- triaged, security/triage.md T2
-        uint256 b = uint256(budget) * 1e18 / (lnN + 1);
-        if (b < Constants.B_MIN || b > Constants.B_MAX) return 0;
-        return b * 1e12;
+    function _prior(Spec memory sp) internal view returns (uint256[] memory) {
+        if (sp.kind == Kind.UPDOWN) return PriorMath.uniform(2);
+        return PriorMath.floorNormalize(PriorMath.raw(_days[sp.token][sp.dayId].refPrice8, sp.edges, sp.volBps));
     }
 
     function _skipped(Spec memory sp, uint8 reason) internal {

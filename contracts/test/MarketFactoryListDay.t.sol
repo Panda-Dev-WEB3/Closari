@@ -6,11 +6,13 @@ import {IExchangeCalendar} from "../src/interfaces/IExchangeCalendar.sol";
 import {ILMSRMarket} from "../src/interfaces/ILMSRMarket.sol";
 import {IMarketFactory} from "../src/interfaces/IMarketFactory.sol";
 import {ISettlementOracle} from "../src/interfaces/ISettlementOracle.sol";
+import {PriorMath} from "../src/lib/PriorMath.sol";
 import {StrikeMath} from "../src/lib/StrikeMath.sol";
 import {MockMarket} from "./mocks/MockMarket.sol";
 import {MockPythWrongId} from "./mocks/MockPythWrongId.sol";
 import {Fixture} from "./utils/Fixture.sol";
 import {PythErrors} from "@pythnetwork/pyth-sdk-solidity/PythErrors.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 contract MarketFactoryListDayTest is Fixture {
     bytes[] internal empty;
@@ -53,7 +55,7 @@ contract MarketFactoryListDayTest is Fixture {
         assertEq(above.createdTs, block.timestamp);
         assertEq(above.multiplierSnapshot, 1e18);
         assertEq(above.budget, BUDGET);
-        assertApproxEqAbs(above.bWad, 2_885_390_081e12, 1e12); // b ≈ 2,885 shares
+        assertEq(above.bWad, PriorMath.liquidity(above.budget, above.priorWad) * 1e12);
 
         ILMSRMarket.Config memory range = MockMarket(m[6]).config();
         assertEq(uint8(range.kind), uint8(IMarketFactory.Kind.RANGE));
@@ -62,7 +64,7 @@ contract MarketFactoryListDayTest is Fixture {
         assertEq(range.edges[1], 18_700_000_000);
         assertEq(range.edges[2], 18_900_000_000);
         assertEq(range.edges[3], 19_200_000_000);
-        assertApproxEqAbs(range.bWad, 1_242_669_869e12, 1e12); // b ≈ 1,243 shares
+        assertEq(range.bWad, PriorMath.liquidity(range.budget, range.priorWad) * 1e12);
 
         ILMSRMarket.Config memory updown = MockMarket(m[7]).config();
         assertEq(uint8(updown.kind), uint8(IMarketFactory.Kind.UPDOWN));
@@ -76,13 +78,18 @@ contract MarketFactoryListDayTest is Fixture {
         assertEq(factory.marketsOf(address(nvda), FRI)[7], m[7]);
     }
 
-    function test_budgetBound_bTimesLnNWithinBudget() public {
+    function test_budgetBound_worstCaseLossWithinBudget() public {
         address[] memory m = _listFri();
-        // b·ln(2) ≤ budget and b·ln(5) ≤ budget, in base units
-        uint256 b2 = MockMarket(m[0]).config().bWad / 1e12;
-        uint256 b5 = MockMarket(m[6]).config().bWad / 1e12;
-        assertLe(b2 * 693_147_180_559_945_310 / 1e18, BUDGET);
-        assertLe(b5 * 1_609_437_912_434_100_375 / 1e18, BUDGET);
+        for (uint256 i; i < m.length; ++i) {
+            if (m[i] == address(0)) continue;
+            ILMSRMarket.Config memory c = MockMarket(m[i]).config();
+            uint256 pMin = type(uint256).max;
+            for (uint256 j; j < c.n; ++j) {
+                if (c.priorWad[j] < pMin) pMin = c.priorWad[j];
+            }
+            uint256 lnInv = uint256(FixedPointMathLib.lnWad(int256(1e36 / pMin)));
+            assertLe((c.bWad / 1e12) * lnInv / 1e18, c.budget);
+        }
     }
 
     function test_pythReference_appliesMultiplierOnce() public {
