@@ -1,0 +1,27 @@
+{
+  "name": "closari",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*", "contracts"],
+  "scripts": {
+    "site:dev": "bun run --cwd apps/site dev",
+    "site:build": "bun run --cwd apps/site build",
+    "site:preview": "node apps/site/serve-preview.mjs",
+    "site:check": "node apps/site/verification/domain-check.mjs && node apps/site/verification/daily-market-check.mjs",
+    "lint": "biome check packages scripts",
+    "typecheck": "bun run --cwd packages/core typecheck",
+    "test:ts": "bun test packages",
+    "contracts:build": "bun run --cwd contracts build",
+    "contracts:test": "bun run --cwd contracts test",
+    "contracts:test:fork": "bun run --cwd contracts test:fork",
+    "abi:write": "bun run --cwd packages/core abi:write",
+    "abi:check": "bun run --cwd packages/core abi:check",
+    "abi:freeze": "bun run --cwd packages/core abi:freeze",
+    "vectors": "bun run --cwd packages/core vectors",
+    "checks": "bun run scripts/checks/check-deps.ts && bun run scripts/checks/check-multiplier.ts && bun run scripts/checks/check-banned-words.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@types/bun": "1.4.2",
+    "typescript": "5.9.3"
+  }
+}

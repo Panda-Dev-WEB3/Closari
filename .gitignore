@@ -1,8 +1,15 @@
 *.zip
 node_modules/
 apps/site/dist/
+apps/site/.vite/
 contracts/out/
 contracts/cache/
+contracts/broadcast/*/31337/
+contracts/lcov.info
+contracts/aderyn.json
+coverage/
 .env
 .env.*
 !.env.example
+__pycache__/
+.DS_Store
