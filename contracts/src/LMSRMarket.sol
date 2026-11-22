@@ -315,24 +315,31 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         if (_core.state == State.Voided) voidPricesWad = _voidVec();
     }
 
-    function claim(address) external pure returns (uint256) {
-        revert NotYetImplemented();
+    function claim(address account) external nonReentrant returns (uint256) {
+        address[] memory one = new address[](1);
+        one[0] = account;
+        return _claimBatch(one);
     }
 
-    function claimMany(address[] calldata) external pure {
-        revert NotYetImplemented();
+    function claimMany(address[] calldata accounts) external nonReentrant {
+        _claimBatch(accounts);
     }
 
-    function claimable(address) external pure returns (uint256) {
-        revert NotYetImplemented();
+    function claimable(address account) external view returns (uint256) {
+        return MarketSettlement.claimableOf(account, _claimed);
     }
 
-    function sweep() external pure {
-        revert NotYetImplemented();
+    /// @notice Once, after final, permissionless. Fees never move here (pull model, Backend §3.8).
+    function sweep() external nonReentrant {
+        if (_swept) revert AlreadySwept();
+        _swept = true;
+        MarketSettlement.sweepFinal(_feesPulled, _x, _x0);
     }
 
-    function pullFees() external pure returns (uint256) {
-        revert NotYetImplemented();
+    function pullFees() external nonReentrant returns (uint256 amount) {
+        amount = MarketSettlement.pullFeesTo();
+        feeEscrow = 0;
+        _feesPulled += amount;
     }
 
     // ------------------------------------------------------------------ internals
@@ -499,6 +506,15 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         if (!ok || d > Constants.MAX_DISCOUNT_BPS) return 0;
     }
 
+    /// @dev The library pays and marks each account claimed. Only payments that succeeded are totalled (a deferred
+    ///      claim counts as zero), and only they move the market's totals.
+    function _claimBatch(address[] memory accounts) internal returns (uint256) {
+        (uint256 owed, uint256 fees) = MarketSettlement.claimBatch(accounts, _claimed);
+        paidOut += owed;
+        feeEscrow -= fees;
+        return owed + fees;
+    }
+
     function _xs() internal view returns (uint256[] memory x) {
         uint256 n = _core.n;
         x = new uint256[](n);
@@ -514,15 +530,6 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
             uint256 t = (x[i] - _x0[i]) / 1e12;
             if (t > hi) hi = t;
             if (t < lo) lo = t;
-        }
-    }
-
-    /// @dev Trader liability per outcome, base units.
-    function _trader() internal view returns (uint256[] memory t) {
-        uint256 n = _core.n;
-        t = new uint256[](n);
-        for (uint256 i; i < n; ++i) {
-            t[i] = (_x[i] - _x0[i]) / 1e12;
         }
     }
 

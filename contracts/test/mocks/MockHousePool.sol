@@ -49,4 +49,19 @@ contract MockHousePool {
         best[msg.sender] += dBest;
         ++markCalls;
     }
+
+    struct SweepCall {
+        uint256 budget;
+        uint256 returned;
+        uint256 lastWorst;
+        uint256 lastBest;
+    }
+
+    uint256 public sweepCalls;
+    mapping(address => SweepCall) public swept;
+
+    function onSweep(uint256 budget, uint256 returned, uint256 lastWorst, uint256 lastBest) external {
+        ++sweepCalls;
+        swept[msg.sender] = SweepCall(budget, returned, lastWorst, lastBest);
+    }
 }

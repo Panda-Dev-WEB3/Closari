@@ -293,19 +293,6 @@ contract LMSRMarketTest is MarketFixture {
         _buy(m, bob, 0, 1e6); // the cap is per account
     }
 
-    // ---------------------------------------------------------------- M3 stubs
-
-    function test_settlementStubs_revert() public {
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.claim(alice);
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.claimMany(new address[](0));
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.sweep();
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.pullFees();
-    }
-
     // ---------------------------------------------------------------- accumulator
 
     function test_cumulativeAt_flatMarket() public {
