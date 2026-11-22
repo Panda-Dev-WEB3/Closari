@@ -52,6 +52,16 @@ library MarketSettlement {
         }
     }
 
+    /// @notice voidPrices and voidReserve in one call (keeps the market's bytecode small).
+    function voidAll(uint256[] memory c0, uint256[] memory c1, uint256 w, uint256[] memory prior, uint256[] memory t)
+        public
+        pure
+        returns (uint256[] memory v, uint256 reserve)
+    {
+        v = voidPrices(c0, c1, w, prior);
+        reserve = voidReserve(t, v);
+    }
+
     /// @notice One account's void payout before its fee refund: Σ_i floor(sh_i · v_i / 1e18).
     function voidOwed(uint256[] memory sh, uint256[] memory v) public pure returns (uint256 owed) {
         for (uint256 i; i < sh.length; ++i) {
@@ -63,6 +73,35 @@ library MarketSettlement {
     function voidReserve(uint256[] memory t, uint256[] memory v) public pure returns (uint256 r) {
         for (uint256 i; i < t.length; ++i) {
             r += FixedPointMathLib.mulDivUp(t[i], v[i], 1e18);
+        }
+    }
+
+    /// @notice Who may void, and when (M3 spec §4). GUARDIAN only from the factory before the halt; NO_OPEN only for an
+    ///         UPDOWN market with no open, from openTs; every other reason only from the oracle at or after haltTs.
+    function checkVoid(
+        uint8 reason,
+        address caller,
+        address factory,
+        address oracle,
+        bool upDown,
+        bool openRecorded,
+        uint64 openTs,
+        uint64 haltTs
+    ) public view {
+        if (reason == 9) {
+            if (caller != factory) revert ILMSRMarket.NotFactory();
+        } else if (caller != oracle) {
+            revert ILMSRMarket.NotOracle();
+        }
+        if (reason == 9) {
+            if (block.timestamp >= haltTs) revert ILMSRMarket.Halted();
+        } else if (reason == 0 || reason > 9) {
+            revert ILMSRMarket.BadReason();
+        } else if (reason == 7) {
+            if (!upDown || openRecorded) revert ILMSRMarket.BadReason();
+            if (block.timestamp < openTs) revert ILMSRMarket.TooEarly();
+        } else if (block.timestamp < haltTs) {
+            revert ILMSRMarket.TooEarly();
         }
     }
 

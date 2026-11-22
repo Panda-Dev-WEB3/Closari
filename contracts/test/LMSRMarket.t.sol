@@ -297,10 +297,6 @@ contract LMSRMarketTest is MarketFixture {
 
     function test_settlementStubs_revert() public {
         vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.resolve(0, 1);
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
-        m.voidMarket(1);
-        vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
         m.claim(alice);
         vm.expectRevert(ILMSRMarket.NotYetImplemented.selector);
         m.claimMany(new address[](0));

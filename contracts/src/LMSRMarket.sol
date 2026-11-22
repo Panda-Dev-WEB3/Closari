@@ -5,6 +5,7 @@ import {IClsrStaking} from "./interfaces/IClsrStaking.sol";
 import {IHousePool} from "./interfaces/IHousePool.sol";
 import {ILMSRMarket} from "./interfaces/ILMSRMarket.sol";
 import {IMarketFactory} from "./interfaces/IMarketFactory.sol";
+import {ISettlementOracle} from "./interfaces/ISettlementOracle.sol";
 import {IStockToken} from "./interfaces/external/IStockToken.sol";
 import {IUSDG} from "./interfaces/external/IUSDG.sol";
 import {Constants} from "./lib/Constants.sol";
@@ -92,6 +93,16 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     uint64[2] internal _cpTs;
     bool[2] internal _cpDone;
     uint256[4][2] internal _cp;
+
+    // Final state (M3).
+    uint8 internal _winner;
+    uint8 internal _voidReason;
+    bool internal _swept;
+    uint64[8] internal _v; // void prices, WAD, written once
+    uint256 internal _reserve; // owed to share holders at final; liability() after final
+    uint256 internal _feesPulled;
+    uint256 public paidOut; // share payouts claimed so far (fee refunds excluded)
+    mapping(address => bool) internal _claimed;
 
     constructor(address usdg, address permit2) {
         USDG = usdg;
@@ -182,6 +193,7 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     }
 
     function liability() external view returns (uint256 hi) {
+        if (_core.state != State.Trading) return _reserve;
         (hi,) = _liab(_xs());
     }
 
@@ -279,12 +291,46 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         _core.openRecorded = true;
     }
 
-    function resolve(uint8, int64) external pure {
-        revert NotYetImplemented();
+    function resolve(uint8 winner, int64 settlePrice8) external {
+        if (msg.sender != oracle) revert NotOracle();
+        if (_core.state != State.Trading) revert NotTrading();
+        if (block.timestamp < _t.closeTs) revert TooEarly();
+        if (winner >= _core.n) revert BadOutcome();
+        _core.state = State.Resolved;
+        _winner = winner;
+        _reserve = (_x[winner] - _x0[winner]) / 1e12;
+        emit Resolved(winner, settlePrice8);
     }
 
-    function voidMarket(uint8) external pure {
-        revert NotYetImplemented();
+    /// @dev GUARDIAN only from the factory, before the halt. Every other reason only from the oracle: NO_OPEN for an
+    ///      UPDOWN market with no open at or after openTs, the rest at or after haltTs (M3 spec §4).
+    function voidMarket(uint8 reason) external {
+        if (_core.state != State.Trading) revert NotTrading();
+        uint8 guardian = uint8(ISettlementOracle.VoidReason.GUARDIAN);
+        MarketSettlement.checkVoid(
+            reason,
+            msg.sender,
+            factory,
+            oracle,
+            _core.kind == IMarketFactory.Kind.UPDOWN,
+            _core.openRecorded,
+            _t.openTs,
+            _t.haltTs
+        );
+        (uint256[] memory c0, uint256[] memory c1, uint256 w) = _voidWindow(reason == guardian);
+        (uint256[] memory v, uint256 reserve) = MarketSettlement.voidAll(c0, c1, w, _prior, _trader());
+        for (uint256 i; i < v.length; ++i) {
+            _v[i] = uint64(v[i]); // each ≤ 1e18 < 2^64
+        }
+        _core.state = State.Voided;
+        _voidReason = reason;
+        _reserve = reserve;
+        emit Voided(reason, v);
+    }
+
+    function finalInfo() external view returns (uint8 winner, uint8 voidReason, uint256[] memory voidPricesWad) {
+        (winner, voidReason) = (_winner, _voidReason);
+        if (_core.state == State.Voided) voidPricesWad = _voidVec();
     }
 
     function claim(address) external pure returns (uint256) {
@@ -296,10 +342,6 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     }
 
     function claimable(address) external pure returns (uint256) {
-        revert NotYetImplemented();
-    }
-
-    function finalInfo() external pure returns (uint8, uint8, uint256[] memory) {
         revert NotYetImplemented();
     }
 
@@ -490,6 +532,45 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
             uint256 t = (x[i] - _x0[i]) / 1e12;
             if (t > hi) hi = t;
             if (t < lo) lo = t;
+        }
+    }
+
+    /// @dev The void TWAP window (M3 spec §5): an UPDOWN market with no open at or after openTs uses the window ending
+    ///      at openTs whatever the reason; a guardian void uses [createdTs, now]; every other void ends at haltTs.
+    ///      No trade or open can land after the window's end, so cumulativeAt(stop) is exact.
+    function _voidWindow(bool guardian) internal view returns (uint256[] memory c0, uint256[] memory c1, uint256 w) {
+        uint256 n = _core.n;
+        Times memory t = _t;
+        uint256 j;
+        uint64 stop;
+        if (_core.kind == IMarketFactory.Kind.UPDOWN && !_core.openRecorded && block.timestamp >= t.openTs) {
+            (j, stop) = (1, t.openTs);
+        } else if (guardian) {
+            stop = uint64(block.timestamp);
+            return (new uint256[](n), cumulativeAt(stop), stop - t.createdTs);
+        } else {
+            stop = t.haltTs;
+        }
+        uint64 start = _cpTs[j];
+        c0 = _cpDone[j] ? _unpack(_cp[j], n, start - t.createdTs) : cumulativeAt(start);
+        c1 = cumulativeAt(stop);
+        w = stop - start;
+    }
+
+    /// @dev Trader liability per outcome, base units.
+    function _trader() internal view returns (uint256[] memory t) {
+        uint256 n = _core.n;
+        t = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            t[i] = (_x[i] - _x0[i]) / 1e12;
+        }
+    }
+
+    function _voidVec() internal view returns (uint256[] memory v) {
+        uint256 n = _core.n;
+        v = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            v[i] = _v[i];
         }
     }
 
