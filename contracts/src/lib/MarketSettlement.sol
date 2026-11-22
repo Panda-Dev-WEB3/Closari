@@ -9,6 +9,11 @@ import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 /// @notice Settlement maths for LMSRMarket (M3 spec §3). A linked library (public functions): its code lives once,
 ///         outside every market clone's bytecode budget, and no trade path calls it. Pure: the market passes in what
 ///         it reads from storage.
+interface IMarketFactoryOwner {
+    function factory() external view returns (address);
+    function oracle() external view returns (address);
+}
+
 library MarketSettlement {
     /// @notice Every `initialize` check (M2 + the M3 deferred self-checks, M3 spec §8). Returns min_i priorWad[i].
     function validateConfig(ILMSRMarket.Config calldata c, address pool, address oracle)
@@ -52,14 +57,48 @@ library MarketSettlement {
         }
     }
 
-    /// @notice voidPrices and voidReserve in one call (keeps the market's bytecode small).
-    function voidAll(uint256[] memory c0, uint256[] memory c1, uint256 w, uint256[] memory prior, uint256[] memory t)
-        public
-        pure
-        returns (uint256[] memory v, uint256 reserve)
-    {
-        v = voidPrices(c0, c1, w, prior);
+    /// @notice Void prices and the reserve for the calling market (M3 spec §5). Runs by DELEGATECALL, so
+    ///         address(this) is the market and its public views are read by self-call. Window: an UPDOWN market with no
+    ///         open at or after openTs uses [checkpoint 1, openTs] whatever the reason; a guardian void uses
+    ///         [createdTs, now] with c0 = 0; every other void uses [checkpoint 0, haltTs]. w == 0 gives the prior.
+    function voidOutcome(bool guardian, uint256[] memory t) public view returns (uint256[] memory v, uint256 reserve) {
+        ILMSRMarket m = ILMSRMarket(address(this));
+        ILMSRMarket.Config memory c = m.config();
+        uint256[] memory c0;
+        uint256[] memory c1;
+        uint256 w;
+        if (c.kind == IMarketFactory.Kind.UPDOWN && c.edges.length == 0 && block.timestamp >= c.openTs) {
+            (uint64[2] memory ts, uint256[][2] memory cp) = m.checkpoints();
+            (c0, c1, w) = (cp[1], m.cumulativeAt(c.openTs), c.openTs - ts[1]);
+        } else if (guardian) {
+            c0 = new uint256[](c.n);
+            (c1, w) = (m.cumulativeAt(uint64(block.timestamp)), block.timestamp - c.createdTs);
+        } else {
+            (uint64[2] memory ts, uint256[][2] memory cp) = m.checkpoints();
+            (c0, c1, w) = (cp[0], m.cumulativeAt(c.haltTs), c.haltTs - ts[0]);
+        }
+        v = voidPrices(c0, c1, w, c.priorWad);
         reserve = voidReserve(t, v);
+    }
+
+    /// @notice Computes the void outcome for the calling market, writes the void prices into its storage array and
+    ///         checks who may void and when, emits Voided (by DELEGATECALL, so the event comes from the market). Returns the reserve.
+    function voidFinal(uint8 reason, uint256[8] storage x, uint256[8] storage x0, uint64[8] storage vs)
+        public
+        returns (uint256 reserve)
+    {
+        checkVoid(reason, msg.sender); // msg.sender is the market's caller under DELEGATECALL
+        uint256 n = ILMSRMarket(address(this)).config().n;
+        uint256[] memory t = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            t[i] = (x[i] - x0[i]) / 1e12;
+        }
+        uint256[] memory v;
+        (v, reserve) = voidOutcome(reason == 9, t);
+        for (uint256 i; i < v.length; ++i) {
+            vs[i] = uint64(v[i]); // each ≤ 1e18 < 2^64
+        }
+        emit ILMSRMarket.Voided(reason, v);
     }
 
     /// @notice One account's void payout before its fee refund: Σ_i floor(sh_i · v_i / 1e18).
@@ -78,19 +117,15 @@ library MarketSettlement {
 
     /// @notice Who may void, and when (M3 spec §4). GUARDIAN only from the factory before the halt; NO_OPEN only for an
     ///         UPDOWN market with no open, from openTs; every other reason only from the oracle at or after haltTs.
-    function checkVoid(
-        uint8 reason,
-        address caller,
-        address factory,
-        address oracle,
-        bool upDown,
-        bool openRecorded,
-        uint64 openTs,
-        uint64 haltTs
-    ) public view {
+    function checkVoid(uint8 reason, address caller) internal view {
+        ILMSRMarket m = ILMSRMarket(address(this));
+        ILMSRMarket.Config memory c = m.config();
+        (uint64 openTs, uint64 haltTs) = (c.openTs, c.haltTs);
+        bool upDown = c.kind == IMarketFactory.Kind.UPDOWN;
+        bool openRecorded = c.edges.length != 0;
         if (reason == 9) {
-            if (caller != factory) revert ILMSRMarket.NotFactory();
-        } else if (caller != oracle) {
+            if (caller != IMarketFactoryOwner(address(m)).factory()) revert ILMSRMarket.NotFactory();
+        } else if (caller != IMarketFactoryOwner(address(m)).oracle()) {
             revert ILMSRMarket.NotOracle();
         }
         if (reason == 9) {
