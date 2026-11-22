@@ -336,6 +336,7 @@ contract LMSRMarketTest is MarketFixture {
 
     function test_setOpenReference_rejectsNonPositivePrice() public {
         LMSRMarket u = _market(IMarketFactory.Kind.UPDOWN, _uniform(2), BUDGET);
+        vm.warp(OPEN);
         vm.prank(oracle);
         vm.expectRevert(ILMSRMarket.BadConfig.selector);
         u.setOpenReference(0, 1e6);
@@ -500,13 +501,15 @@ contract LMSRMarketTest is MarketFixture {
         ILMSRMarket.Config memory c = _cfg(8);
         c.baseFeeBps = Constants.MAX_BASE_FEE_BPS;
         c.rampMaxBps = Constants.MAX_RAMP_BPS;
-        c.bWad = type(uint128).max;
+        c.bWad = Constants.B_MAX * 1e12;
+        c.budget = type(uint96).max;
         c.haltTs = c.createdTs + 1;
         c.closeTs = c.haltTs + 1;
         LMSRMarket c2 = LMSRMarket(_clone());
         c2.initialize(c, address(pool), oracle, router, address(0));
         assertEq(c2.config().n, 8);
         assertEq(c2.config().rampMaxBps, 500);
+        assertEq(c2.config().bWad, Constants.B_MAX * 1e12);
     }
 
     // ---------------------------------------------------------------- CA window lower edge

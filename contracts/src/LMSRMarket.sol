@@ -9,6 +9,7 @@ import {IStockToken} from "./interfaces/external/IStockToken.sol";
 import {IUSDG} from "./interfaces/external/IUSDG.sol";
 import {Constants} from "./lib/Constants.sol";
 import {LMSRMath} from "./lib/LMSRMath.sol";
+import {MarketSettlement} from "./lib/MarketSettlement.sol";
 import {ISignatureTransfer} from "permit2/ISignatureTransfer.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {ReentrancyGuardTransient} from "solady/utils/ReentrancyGuardTransient.sol";
@@ -106,22 +107,11 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
 
     function initialize(Config calldata c, address pool_, address oracle_, address router_, address staking_) external {
         if (_core.initialized) revert AlreadyInitialized();
+        uint256 pMin = MarketSettlement.validateConfig(c, pool_, oracle_);
         uint256 n = c.n;
-        if (
-            n < 2 || n > 8 || c.priorWad.length != n || c.bWad == 0 || c.bWad > type(uint128).max
-                || c.createdTs >= c.haltTs || c.haltTs >= c.closeTs || c.baseFeeBps > Constants.MAX_BASE_FEE_BPS
-                || c.rampMaxBps > Constants.MAX_RAMP_BPS || pool_ == address(0) || oracle_ == address(0)
-        ) revert BadConfig();
-        uint256 sum = 0;
-        uint256 pMin = type(uint256).max;
         for (uint256 i; i < n; ++i) {
-            uint256 p = c.priorWad[i];
-            if (p < Constants.PRIOR_MIN) revert BadConfig();
-            sum += p;
-            if (p < pMin) pMin = p;
-            _prior.push(p);
+            _prior.push(c.priorWad[i]);
         }
-        if (sum != 1e18) revert BadConfig();
 
         _core = Core(c.token, c.dayId, c.kind, c.n, State.Trading, true, false);
         _t = Times(c.createdTs, c.openTs, c.haltTs, c.closeTs);
@@ -280,6 +270,9 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         if (_core.kind != IMarketFactory.Kind.UPDOWN) revert NotUpDown();
         if (_core.openRecorded) revert OpenAlreadySet();
         if (_core.state != State.Trading) revert NotTrading();
+        if (block.timestamp < _t.openTs) revert TooEarly();
+        // After the halt the accumulator must stay at or before haltTs, so a later void can read cumulativeAt(haltTs).
+        if (block.timestamp >= _t.haltTs) revert Halted();
         if (openPrice8 <= 0) revert BadConfig();
         _roll(prices(), _core.n);
         _edges.push(openPrice8);
