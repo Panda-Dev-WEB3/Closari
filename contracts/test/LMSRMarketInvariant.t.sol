@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {LMSRMarket} from "../src/LMSRMarket.sol";
+import {ILMSRMarket} from "../src/interfaces/ILMSRMarket.sol";
 import {IMarketFactory} from "../src/interfaces/IMarketFactory.sol";
 import {Constants} from "../src/lib/Constants.sol";
 import {MockStockToken} from "./mocks/MockStockToken.sol";
@@ -21,9 +22,12 @@ contract MarketHandler is Test {
     uint256 public buys;
     uint256 public sells;
     uint256 public calls;
+    address public oracle;
+    address public factoryAddr;
+    bool public claimFailed;
 
-    constructor(LMSRMarket m_, MockUSDG usdg_, MockStockToken token_, uint64 halt_) {
-        (m, usdg, token, halt) = (m_, usdg_, token_, halt_);
+    constructor(LMSRMarket m_, MockUSDG usdg_, MockStockToken token_, uint64 halt_, address oracle_, address factory_) {
+        (m, usdg, token, halt, oracle, factoryAddr) = (m_, usdg_, token_, halt_, oracle_, factory_);
         for (uint256 i; i < 8; ++i) {
             actors[i] = address(uint160(0x1000 + i));
             usdg.mint(actors[i], 10_000_000e6);
@@ -76,6 +80,46 @@ contract MarketHandler is Test {
         token.setOraclePaused(r % 8 == 0); // paused for ~1 in 8 toggles
     }
 
+    /// @dev Ends the market (guardian void before the halt, resolve after the close, or a settlement void after the
+    ///      halt), only once at least one trade happened, so the existing "some trade succeeded" check stays meaningful.
+    function end(uint256 r) external {
+        ++calls;
+        if (m.state() != ILMSRMarket.State.Trading || buys + sells == 0) return;
+        uint256 mode = r % 3;
+        if (mode == 0 && block.timestamp < halt) {
+            vm.prank(factoryAddr);
+            m.voidMarket(9);
+            return;
+        }
+        if (mode == 1) {
+            uint64 close = m.config().closeTs;
+            if (block.timestamp < close) vm.warp(close);
+            vm.prank(oracle);
+            m.resolve(uint8((r >> 8) % m.config().n), 1);
+            return;
+        }
+        if (block.timestamp < halt) vm.warp(halt);
+        vm.prank(oracle);
+        m.voidMarket(3);
+    }
+
+    function claimAll() external {
+        ++calls;
+        if (m.state() == ILMSRMarket.State.Trading) return;
+        for (uint256 i; i < 8; ++i) {
+            try m.claim(actors[i]) {}
+            catch {
+                claimFailed = true;
+            }
+        }
+    }
+
+    function sweepNow() external {
+        ++calls;
+        if (m.state() == ILMSRMarket.State.Trading) return;
+        try m.sweep() {} catch {} // AlreadySwept on repeats is fine
+    }
+
     function sumShares(uint8 k) external view returns (uint256 s) {
         for (uint256 i; i < 8; ++i) {
             s += m.shares(actors[i], k);
@@ -92,7 +136,7 @@ contract LMSRMarketInvariantTest is MarketFixture {
         uint256[] memory prior = new uint256[](5);
         (prior[0], prior[1], prior[2], prior[3], prior[4]) = (5e16, 2e17, 5e17, 2e17, 5e16);
         m = _market(IMarketFactory.Kind.RANGE, prior, BUDGET);
-        h = new MarketHandler(m, usdg, token, HALT);
+        h = new MarketHandler(m, usdg, token, HALT, oracle, address(this));
         targetContract(address(h));
     }
 
@@ -101,7 +145,24 @@ contract LMSRMarketInvariantTest is MarketFixture {
     }
 
     function invariant_I2_balanceCoversCashAndFees() public view {
-        assertGe(usdg.balanceOf(address(m)), m.cash() + m.feeEscrow());
+        (, uint256 returned,,) = pool.swept(address(m));
+        assertGe(usdg.balanceOf(address(m)) + m.paidOut() + returned, m.cash() + m.feeEscrow());
+    }
+
+    function invariant_I4_claimsWithinReserve() public view {
+        if (m.state() == ILMSRMarket.State.Trading) return;
+        assertLe(m.paidOut(), m.liability());
+        assertFalse(h.claimFailed(), "a claim reverted");
+    }
+
+    function invariant_I16_voidPricesInSimplex() public view {
+        if (m.state() != ILMSRMarket.State.Voided) return;
+        (,, uint256[] memory v) = m.finalInfo();
+        uint256 s;
+        for (uint256 i; i < v.length; ++i) {
+            s += v[i];
+        }
+        assertLe(s, 1e18);
     }
 
     function invariant_I3_pricesInClamp() public view {
@@ -138,7 +199,8 @@ contract LMSRMarketInvariantTest is MarketFixture {
             if (t > hi) hi = t;
             if (t < lo) lo = t;
         }
-        assertEq(hi, m.liability());
+        if (m.state() == ILMSRMarket.State.Trading) assertEq(hi, m.liability());
+        else assertLe(m.liability(), hi); // once final the reserve is the winner's shares or the void floor sum
         assertEq(pool.worst(address(m)), int256(m.cash() - hi));
         assertEq(pool.best(address(m)), int256(m.cash() - lo));
     }
