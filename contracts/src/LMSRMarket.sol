@@ -302,6 +302,14 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         revert NotYetImplemented();
     }
 
+    function claimable(address) external pure returns (uint256) {
+        revert NotYetImplemented();
+    }
+
+    function finalInfo() external pure returns (uint8, uint8, uint256[] memory) {
+        revert NotYetImplemented();
+    }
+
     function sweep() external pure {
         revert NotYetImplemented();
     }

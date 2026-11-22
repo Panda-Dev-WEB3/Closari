@@ -284,3 +284,13 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 - Change: `ILMSRMarket.Config` adds `priorWad`, `baseFeeBps`, `rampMaxBps`; `ILMSRMarket` adds trading errors and the views `cumulativeAt(uint64)` and `checkpoints()`. `IStockTokenAllowList.Asset` adds `uint16 volBps` (required in [25, 2000] when listed). `IMarketFactory` adds `setFees(uint16,uint16)`, `fees()`, `FeesSet`, `BadFees`. `Constants.B_MIN` is now 100 shares (no ABI change).
 - Why: open decision (a), decided 2026-11-21 as a seeded opening price from per-asset volatility, with worst-case loss ≤ budget (M2 spec §3). Fee parameters are snapshotted per market (I9). The accumulator views feed the M3 void price.
 - Affects: M3 (reads checkpoints; implements settlement), M4 keeper/indexer (new Config fields, FeesSet), M5 API (quotes use the prior-seeded state), M8 deploy (volBps and fee values).
+
+### 2026-11-22 — ISettlementOracle: finalizeOpen, bounties, errors and events (M3)
+- Change: adds `finalizeOpen(address,uint32)`, `setBounties(uint96,uint96,uint96)` (onlyTimelock, each ≤ 5 USDG), `bounties()`, events `OpenFinal` and `BountiesSet`, and 14 custom errors (`NotListed`, `TooEarly`, `TooLate`, `AlreadyFinal`, `TierNotHigher`, `WrongFeed`, `InsufficientFee`, `NotFinal`, `NoUpDownMarket`, `BadOpen`, `PhaseMismatch`, `BadRound`, `NotTimelock`, `BountyTooHigh`). No existing signature changes.
+- Why: the open uses the same tier precedence as the close, so a tier B/C open needs a finalisation call after the improvement window (M3 spec §9.4); bounties are timelocked parameters (§9.5).
+- Affects: M4 keeper (calls `finalizeOpen` 30 min after a B/C open; reads `OpenFinal`), M4 indexer, M8 deploy (sets bounties through the timelock).
+
+### 2026-11-22 — ILMSRMarket: claimable, finalInfo and settlement errors (M3)
+- Change: adds `claimable(address) view returns (uint256)`, `finalInfo() view returns (uint8 winner, uint8 voidReason, uint256[] voidPricesWad)`, and errors `NotFactory`, `NotRouter`, `NotFinal`, `NotResolved`, `AlreadySwept`, `BadReason`, `TooEarly`. No existing signature changes.
+- Why: the UI, API and keeper need what an account can claim and the final outcome without replaying events (M3 spec §6–§7).
+- Affects: M4 indexer and API, M5 web app.

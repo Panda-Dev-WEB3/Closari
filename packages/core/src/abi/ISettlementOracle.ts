@@ -2,6 +2,29 @@
 export const iSettlementOracleAbi = [
   {
     "type": "function",
+    "name": "bounties",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "closeBounty",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "batchBounty",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "openBounty",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "closeResult",
     "inputs": [
       {
@@ -64,6 +87,24 @@ export const iSettlementOracleAbi = [
   {
     "type": "function",
     "name": "finalizeClose",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "dayId",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "finalizeOpen",
     "inputs": [
       {
         "name": "token",
@@ -170,6 +211,29 @@ export const iSettlementOracleAbi = [
   },
   {
     "type": "function",
+    "name": "setBounties",
+    "inputs": [
+      {
+        "name": "closeBounty",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "batchBounty",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "openBounty",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "settleMarkets",
     "inputs": [
       {
@@ -264,6 +328,31 @@ export const iSettlementOracleAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "BountiesSet",
+    "inputs": [
+      {
+        "name": "closeBounty",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
+      },
+      {
+        "name": "batchBounty",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
+      },
+      {
+        "name": "openBounty",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -390,6 +479,37 @@ export const iSettlementOracleAbi = [
   },
   {
     "type": "event",
+    "name": "OpenFinal",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "dayId",
+        "type": "uint32",
+        "indexed": true,
+        "internalType": "uint32"
+      },
+      {
+        "name": "price8",
+        "type": "int64",
+        "indexed": false,
+        "internalType": "int64"
+      },
+      {
+        "name": "dayVoid",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum ISettlementOracle.VoidReason"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OpenRecorded",
     "inputs": [
       {
@@ -424,5 +544,98 @@ export const iSettlementOracleAbi = [
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadyFinal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadRound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BountyTooHigh",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFee",
+    "inputs": [
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NoUpDownMarket",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotFinal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotListed",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "dayId",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotTimelock",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PhaseMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TierNotHigher",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooEarly",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooLate",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongFeed",
+    "inputs": [
+      {
+        "name": "got",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
   }
 ] as const;

@@ -26,6 +26,11 @@ M3 makes every listed market end, and pays everyone out:
 | Bounties | Set through the timelock with `setBounties`, each capped at 5 USDG in code. Proposed values: 2 USDG per final close, 1 per token-day's settlement, 0.5 per final open |
 | Devnet | The devnet deploy wires the real oracle with `MockPyth`. End-to-end settlement is proven by the in-process smoke test, because the devnet runs in real time; devnet settlement waits for the M4 keeper |
 | M1 open decision (d) | The listing reference stays caller-chosen within 120 s (non-Unique parse). It is documented as an accepted risk in `security/triage.md` |
+| Unique-parse mock (planning) | SDK `MockPyth.parsePriceFeedUpdatesUnique` skips the uniqueness check. Tests and `DeployLocal` use `test/mocks/MockPythUnique.sol`, a forwarder that enforces it. Real Pyth behaviour stays a fork-fixture release gate |
+| `paidOut` (planning) | Public getter on the market (not in the interface): share payouts claimed, fee refunds excluded. After final, I2 is `balance ≥ cash + feeEscrow − paidOut − sweptReturned` |
+| Deployment order (planning) | The oracle deploys after the calendar and allow-list and before the factory (factory predicted at `nonce + 3`), because it takes the factory address |
+| Kind arity (planning) | `validateConfig` also requires `n == 2` for ABOVE and UPDOWN, and reverts `ILMSRMarket.BadConfig()` |
+| Finalise and expiry reverts (planning) | `finalizeClose`/`finalizeOpen`: `AlreadyFinal` if final, `TooEarly` if nothing stored or the window is open. `voidExpired`/`voidNoOpen`: `AlreadyFinal` if final, `TooEarly` if something is stored or the window has not passed |
 
 ## 3. Architecture
 
