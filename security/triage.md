@@ -52,4 +52,4 @@ Measured 2026-11-23 with `forge test --gas-report`. The first five come from `te
 | `sweep` (median of 8; range 202,359 to 264,703) | 210,917 |
 | `voidMarket` | 170,309 |
 
-Final runtime sizes: `LMSRMarket` 23,419 B (gate 23,500), `SettlementOracle` 17,854 B, `MarketSettlement` 13,228 B.
+Final runtime sizes: `LMSRMarket` 23,419 B (gate 23,500), `SettlementOracle` 17,854 B, `MarketSettlement` 13,195 B.

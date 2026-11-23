@@ -8,9 +8,7 @@ import {Constants} from "./Constants.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
-/// @notice Settlement maths for LMSRMarket (M3 spec §3). A linked library (public functions): its code lives once,
-///         outside every market clone's bytecode budget, and no trade path calls it. Pure: the market passes in what
-///         it reads from storage.
+/// @notice The market's own getters, which the library reads by self-call while running in the market's context.
 interface IMarketSelf {
     function factory() external view returns (address);
     function oracle() external view returns (address);

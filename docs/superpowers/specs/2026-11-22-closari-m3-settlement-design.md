@@ -42,7 +42,7 @@ M3 makes every listed market end, and pays everyone out:
 | `MarketFactory` | Unchanged code. `guardianVoid` now reaches a real `voidMarket` |
 | `PriceMath` (existing) | `to8`, `toTokenTerms`, `toTokenTermsConf`: still the only multiplier arithmetic (I11) |
 
-The library is not pure: it was widened to meet the size gate (decided during implementation to meet the size gate), so `LMSRMarket` must be linked to it at deploy time, as well as to `PriorMath` (Forge scripts auto-link both). It adds no gas to trades: only settlement paths call it. **Size gate:** `LMSRMarket` runtime ≤ 23,500 B, which leaves about 1 KB below the 24,576 B limit for M7. `SettlementOracle` must stay under 24,576 B. Final runtime sizes (final): `LMSRMarket` 23,419 B, `SettlementOracle` 17,854 B, `MarketSettlement` 13,228 B.
+The library is not pure: it was widened during implementation to meet the size gate, so `LMSRMarket` must be linked to it at deploy time, as well as to `PriorMath` (Forge scripts auto-link both). It adds no gas to trades: only settlement paths call it. **Size gate:** `LMSRMarket` runtime ≤ 23,500 B, which leaves about 1 KB below the 24,576 B limit for M7. `SettlementOracle` must stay under 24,576 B. Final runtime sizes: `LMSRMarket` 23,419 B, `SettlementOracle` 17,854 B, `MarketSettlement` 13,195 B.
 
 ## 4. Market: final states and who may call
 
