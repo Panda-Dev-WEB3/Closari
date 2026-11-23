@@ -94,6 +94,7 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
 
     // ------------------------------------------------------------------ close
 
+    // slither-disable-next-line reentrancy-eth -- triaged, security/triage.md T6
     function submitClose(address token, uint32 dayId, Tier tier, bytes[] calldata pythUpdate, uint80 clRoundId)
         external
         payable
@@ -136,6 +137,7 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
 
     // ------------------------------------------------------------------ open (UPDOWN)
 
+    // slither-disable-next-line reentrancy-eth -- triaged, security/triage.md T6
     function recordOpen(address token, uint32 dayId, Tier tier, bytes[] calldata pythUpdate)
         external
         payable
@@ -174,12 +176,14 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
 
     // ------------------------------------------------------------------ settlement
 
+    // slither-disable-next-line reentrancy-no-eth -- triaged, security/triage.md T7
     function settleMarkets(address token, uint32 dayId, uint256 from, uint256 to) external nonReentrant {
         IMarketFactory.DayInfo memory d = _day(token, dayId);
         Close storage s = _close[token][dayId];
         if (!s.r.final_) revert NotFinal();
         PriceResult memory r = s.r;
         if (to > d.markets.length) to = d.markets.length;
+        // slither-disable-next-line uninitialized-local -- triaged, security/triage.md T8
         uint256 settled;
         for (uint256 i = from; i < to; ++i) {
             ILMSRMarket m = ILMSRMarket(d.markets[i]);
@@ -199,6 +203,7 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
     {
         ILMSRMarket.Config memory c = m.config();
         bool upDown = c.kind == IMarketFactory.Kind.UPDOWN;
+        // slither-disable-next-line uninitialized-local -- triaged, security/triage.md T8
         PriceResult memory o;
         if (upDown) o = _syncOpen(token, dayId, d, m);
         if (r.dayVoid != VoidReason.NONE) {
@@ -216,6 +221,7 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
             }
             return;
         }
+        // slither-disable-next-line uninitialized-local -- triaged, security/triage.md T8
         uint8 w; // ABOVE: 1 if S > K; RANGE: the number of edges ≤ S (bucket index)
         for (uint256 j; j < c.edges.length; ++j) {
             if (_absDiff(s, c.edges[j]) <= r.conf8) {
@@ -336,16 +342,20 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
         returns (bool ok, bool fresh, int256 answer, uint256 updatedAt, uint80 used)
     {
         AggregatorV3Interface agg = AggregatorV3Interface(feed);
+        // slither-disable-next-line unused-return -- triaged, security/triage.md T9
         (uint80 latest,,,,) = agg.latestRoundData();
         uint80 phase = latest >> 64;
         if (rid == 0) {
+            // slither-disable-next-line unused-return -- triaged, security/triage.md T9
             (,,, uint256 first,) = agg.getRoundData((phase << 64) | 1);
             if (first <= closeTs) revert BadRound();
             return (false, false, 0, 0, 0);
         }
         if (rid >> 64 != phase) revert PhaseMismatch();
+        // slither-disable-next-line unused-return -- triaged, security/triage.md T9
         (, answer,, updatedAt,) = agg.getRoundData(rid);
         if (updatedAt == 0 || updatedAt > closeTs) revert BadRound();
+        // slither-disable-next-line unused-return -- triaged, security/triage.md T9
         try agg.getRoundData(rid + 1) returns (uint80, int256, uint256, uint256 nextAt, uint80) {
             if (nextAt != 0 && nextAt <= closeTs) revert BadRound();
         } catch {}
