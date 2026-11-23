@@ -240,8 +240,8 @@ Public repo `Panda-Dev-WEB3/Closari`. Repository settings: branch protection on 
 
 Found in the M1 final review. Each later milestone must honour these; the M1 factory relies on them.
 
-1. **M3 oracle:** it must finalise close results for listed days with zero or partially created markets. Otherwise the factory's reference walk (§4.4, check 10) reverts `PreviousDayNotFinal` and blocks listing for the next 3 trading days.
-2. **M3 `settleMarkets`:** it must skip `address(0)` entries in `DayInfo.markets`, and must treat `resolve`/`voidMarket` on an already-final market (for example after `guardianVoid`) as a no-op, so batches do not revert.
+1. **M3 oracle:** it must finalise close results for listed days with zero or partially created markets. Otherwise the factory's reference walk (§4.4, check 10) reverts `PreviousDayNotFinal` and blocks listing for the next 3 trading days. — done in M3: the oracle finalises any listed day's close independently of how many markets exist (SettlementOracle.submitClose/finalizeClose/voidExpired); SettlementE2E lists the next day from it.
+2. **M3 `settleMarkets`:** it must skip `address(0)` entries in `DayInfo.markets`, and must treat `resolve`/`voidMarket` on an already-final market (for example after `guardianVoid`) as a no-op, so batches do not revert. — done in M3: settleMarkets skips address(0) and any market not in Trading before calling it (SettlementOracleSettle.test_settle_skipsEmptyAndFinal_batchBountyOnce).
 3. **M7 pool:** refusals in `allocate` must revert with a non-empty custom error and must never wrap a gas-starved inner failure into one, because the factory treats empty revert data as `AllocationFailed` (and reverts the listing) while any non-empty revert skips the market.
 4. **M7 router:** `creditBounty` must never revert for an insufficient balance. It accrues a debt or caps the amount instead, so `listDay` and settlement cannot halt (I14).
 5. **`CA_AFTER = 3600`** must be identical in the factory, the market and the oracle. Move it into a shared constants library when M2 adds the market. — done in M2: `src/lib/Constants.sol` defines `CA_AFTER` once, and the factory and the market both read it.
@@ -255,7 +255,7 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 - **(a) LMSR opening price (final-review #6).** Markets open at uniform prices. ABOVE ±2% and ±5% open at 0.50 against true chances of about 0.25 and 0.05, and the reviewer estimates about 1.8 budgets per token per day lost to the first arbitrageurs. Options: a factory-seeded prior (a `Config` change), near-money strikes only, or listing before the open only. Owner: the product owners. Must be decided before M2 freezes market initialisation.
 - **(b) Listing vs. sweep ordering before M7.** Either a pool view such as `pendingSweeps()`, or a keeper rule to list only after the previous day's sweeps and `processQueue`.
 - **(c) Early-close days.** No listing until the 13:00 feed behaviour is confirmed. Enforce it with guardian `setSkip` or in the M4 keeper.
-- **(d) Pyth reference on the listing path.** The reference is caller-chosen within 120 s (the non-Unique parse). Document it as accepted, or switch to the Unique parse in M3.
+- **(d) Pyth reference on the listing path.** The reference is caller-chosen within 120 s (the non-Unique parse). Document it as accepted, or switch to the Unique parse in M3. — decided 2026-11-22: kept as is (caller-chosen within 120 s); accepted risk recorded in security/triage.md.
 - **(e) VPS.** Before M4, remove the `deploy` user from the `docker` group (use a forced-command/rrsync key) and add required reviewers to the `production` environment.
 
 ## Interface change log

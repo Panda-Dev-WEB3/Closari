@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {ExchangeCalendar} from "../src/ExchangeCalendar.sol";
 import {LMSRMarket} from "../src/LMSRMarket.sol";
 import {MarketFactory} from "../src/MarketFactory.sol";
+import {SettlementOracle} from "../src/SettlementOracle.sol";
 import {StockTokenAllowList} from "../src/StockTokenAllowList.sol";
 import {IExchangeCalendar} from "../src/interfaces/IExchangeCalendar.sol";
 import {IStockTokenAllowList} from "../src/interfaces/IStockTokenAllowList.sol";
@@ -11,7 +12,7 @@ import {MockAggregator} from "../test/mocks/MockAggregator.sol";
 import {MockBeacon} from "../test/mocks/MockBeacon.sol";
 import {MockFeeRouter} from "../test/mocks/MockFeeRouter.sol";
 import {MockHousePool} from "../test/mocks/MockHousePool.sol";
-import {MockSettlementOracle} from "../test/mocks/MockSettlementOracle.sol";
+import {MockPythUnique} from "../test/mocks/MockPythUnique.sol";
 import {MockStockToken} from "../test/mocks/MockStockToken.sol";
 import {MockUSDG} from "../test/mocks/MockUSDG.sol";
 import {MockPyth} from "@pythnetwork/pyth-sdk-solidity/MockPyth.sol";
@@ -19,8 +20,8 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC7821} from "solady/accounts/ERC7821.sol";
 import {Timelock} from "solady/accounts/Timelock.sol";
 
-/// @notice End-to-end on anvil (31337) or an anvil fork of 4663. Deploys the real LMSRMarket implementation and MOCKS
-///         for pool/oracle/router (and USDG on 31337; a 4663 fork uses the real USDG).
+/// @notice End-to-end on anvil (31337) or an anvil fork of 4663. Deploys the real LMSRMarket implementation and SettlementOracle
+///         and MOCKS for pool/router (and USDG on 31337; a 4663 fork uses the real USDG).
 ///         An anvil fork and the live chain 4663 share the chain id, so the chain id cannot tell them apart. The
 ///         guards are the CLOSARI_LOCAL_DEPLOY=true flag plus an `anvil_nodeInfo` RPC probe that only anvil answers.
 ///         The hardcoded keys are anvil's PUBLIC test keys: never fund them on a live chain.
@@ -41,6 +42,8 @@ contract DeployLocal is Script {
         StockTokenAllowList allowList;
         MarketFactory factory;
         MockPyth pyth;
+        address pythU;
+        SettlementOracle oracle;
         address nvda;
         address usdg;
     }
@@ -88,11 +91,16 @@ contract DeployLocal is Script {
         require(dep.factory.guardian() == GUARDIAN, "factory guardian");
         require(address(dep.calendar.factory()) == address(dep.factory), "calendar factory link");
         require(markets.length == 8, "8 markets");
+        require(address(dep.factory.oracle()) == address(dep.oracle), "factory oracle");
+        require(address(dep.oracle.factory()) == address(dep.factory), "oracle factory");
+        (uint96 cb,,) = dep.oracle.bounties();
+        require(cb == 2e6, "bounties set");
 
         console2.log("timelock ", address(dep.timelock));
         console2.log("calendar ", address(dep.calendar));
         console2.log("allowList", address(dep.allowList));
         console2.log("factory  ", address(dep.factory));
+        console2.log("oracle   ", address(dep.oracle));
         console2.log("listed NVDA dayId", dayId, "markets", markets.length);
 
         if (block.chainid == 31337) _smokeTrade(dep, deployer, markets);
@@ -136,23 +144,25 @@ contract DeployLocal is Script {
             dep.usdg = address(new MockUSDG());
         }
         dep.pyth = new MockPyth(120, 1);
+        dep.pythU = address(new MockPythUnique(dep.pyth)); // factory and oracle use the uniqueness-checking forwarder
         address pool = address(new MockHousePool());
-        address oracle = address(new MockSettlementOracle());
         address router = address(new MockFeeRouter());
         address impl = address(new LMSRMarket(dep.usdg, PERMIT2));
 
-        address predicted = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 2);
+        // calendar, allow-list, oracle, factory: the factory is predicted at nonce + 3 (M3 plan adjustment 3)
+        address predicted = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 3);
         dep.calendar = new ExchangeCalendar(address(dep.timelock), predicted);
         dep.allowList = new StockTokenAllowList(beacon, codehash, address(dep.timelock));
+        dep.oracle = new SettlementOracle(dep.pythU, predicted, router, address(dep.timelock));
         dep.factory = new MarketFactory(
             MarketFactory.Params({
                 calendar: address(dep.calendar),
                 allowList: address(dep.allowList),
                 pool: pool,
-                oracle: oracle,
+                oracle: address(dep.oracle),
                 router: router,
                 staking: STAKING_PLACEHOLDER,
-                pyth: address(dep.pyth),
+                pyth: dep.pythU,
                 marketImpl: impl,
                 timelock: address(dep.timelock),
                 guardian: GUARDIAN
@@ -188,6 +198,10 @@ contract DeployLocal is Script {
         } else {
             _setAsset(dep, dep.nvda, address(new MockAggregator(8, "RHNVDA / USD")), "NVDA");
         }
+
+        _viaTimelock(
+            dep.timelock, address(dep.oracle), abi.encodeCall(SettlementOracle.setBounties, (2e6, 1e6, 5e5)), "bounties"
+        );
     }
 
     function _setAsset(Deployed memory dep, address token, address clFeed, string memory ticker) internal {

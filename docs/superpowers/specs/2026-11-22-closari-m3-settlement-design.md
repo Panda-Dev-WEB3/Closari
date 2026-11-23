@@ -37,12 +37,12 @@ M3 makes every listed market end, and pays everyone out:
 | Unit | Responsibility |
 |---|---|
 | `SettlementOracle` (new, one per deployment) | Close and open results per (token, dayId), the Chainlink cross-check, the CA freeze, `settleMarkets`, bounties. Constructor immutables: `pyth`, `factory`, `router`, `timelock` |
-| `LMSRMarket` | Storage, access checks and every token transfer: `resolve`, `voidMarket`, `claim`, `claimMany`, `sweep`, `pullFees`, plus the new views `claimable` and `finalInfo` |
-| `MarketSettlement` (new linked library, `public` functions) | Pure computation: `validateConfig` (the `initialize` checks, §8), `voidPrices` (§5), `voidOwed` (one account's void payout, §6) and `voidReserve` (§7) |
+| `LMSRMarket` | Storage, access checks and the entry points: `resolve`, `voidMarket`, `claim`, `claimMany`, `sweep`, `pullFees`, plus the new views `claimable` and `finalInfo`. The settlement-only logic is delegated to `MarketSettlement` (see below) |
+| `MarketSettlement` (new linked library, `public` functions, run by DELEGATECALL) | `validateConfig` (the `initialize` checks, §8), the void window (`voidPrices`, §5), claim, sweep and `pullFees` logic (§6, §7), and the per-account `voidOwed` and `voidReserve` maths. Because it runs by DELEGATECALL in the market's context, it moves USDG from the market's own address and reads market state through self-calls. Market behaviour and events are unchanged. |
 | `MarketFactory` | Unchanged code. `guardianVoid` now reaches a real `voidMarket` |
 | `PriceMath` (existing) | `to8`, `toTokenTerms`, `toTokenTermsConf`: still the only multiplier arithmetic (I11) |
 
-The library adds no gas to trades: only settlement paths call it. **Size gate:** `LMSRMarket` runtime ≤ 23,500 B, which leaves about 1 KB below the 24,576 B limit for M7. `SettlementOracle` must stay under 24,576 B.
+The library is not pure: it was widened to meet the size gate (controller rulings in Tasks 3 and 4), so `LMSRMarket` must be linked to it at deploy time, as well as to `PriorMath` (Forge scripts auto-link both). It adds no gas to trades: only settlement paths call it. **Size gate:** `LMSRMarket` runtime ≤ 23,500 B, which leaves about 1 KB below the 24,576 B limit for M7. `SettlementOracle` must stay under 24,576 B. Final runtime sizes (Task 8): `LMSRMarket` 23,419 B, `SettlementOracle` 17,854 B, `MarketSettlement` 13,228 B.
 
 ## 4. Market: final states and who may call
 
