@@ -13,5 +13,6 @@ function isExpectedTradeRevert(bytes memory err) pure returns (bool) {
     }
     return sel == ILMSRMarket.PriceOutOfBounds.selector || sel == ILMSRMarket.LateHourCap.selector
         || sel == ILMSRMarket.Halted.selector || sel == ILMSRMarket.CorporateActionVisible.selector
-        || sel == ILMSRMarket.TradeTooLarge.selector || sel == ILMSRMarket.InsufficientShares.selector;
+        || sel == ILMSRMarket.TradeTooLarge.selector || sel == ILMSRMarket.InsufficientShares.selector
+        || sel == ILMSRMarket.NotTrading.selector;
 }

@@ -13,6 +13,11 @@ import {Test} from "forge-std/Test.sol";
 contract InterfacesTest is Test {
     function test_selectorsMatchBrief() public pure {
         assertEq(IMarketFactory.setFees.selector, bytes4(keccak256("setFees(uint16,uint16)")));
+        assertEq(ISettlementOracle.finalizeOpen.selector, bytes4(keccak256("finalizeOpen(address,uint32)")));
+        assertEq(ISettlementOracle.setBounties.selector, bytes4(keccak256("setBounties(uint96,uint96,uint96)")));
+        assertEq(ISettlementOracle.bounties.selector, bytes4(keccak256("bounties()")));
+        assertEq(ILMSRMarket.claimable.selector, bytes4(keccak256("claimable(address)")));
+        assertEq(ILMSRMarket.finalInfo.selector, bytes4(keccak256("finalInfo()")));
         assertEq(IMarketFactory.listDay.selector, bytes4(keccak256("listDay(address,uint32,bytes[])")));
         assertEq(IExchangeCalendar.setSessions.selector, bytes4(keccak256("setSessions(uint32[],(uint64,uint64)[])")));
         assertEq(

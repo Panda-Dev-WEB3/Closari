@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {LMSRMarket} from "../src/LMSRMarket.sol";
+import {ILMSRMarket} from "../src/interfaces/ILMSRMarket.sol";
 import {IMarketFactory} from "../src/interfaces/IMarketFactory.sol";
 import {Constants} from "../src/lib/Constants.sol";
 import {MockStockToken} from "./mocks/MockStockToken.sol";
@@ -21,9 +22,17 @@ contract MarketHandler is Test {
     uint256 public buys;
     uint256 public sells;
     uint256 public calls;
+    address public oracle;
+    address public factoryAddr;
+    bool public claimFailed;
+    uint256 public endedGuardian;
+    uint256 public endedResolve;
+    uint256 public endedVoid;
+    uint256 public claimsPaid;
+    uint256 public sweeps;
 
-    constructor(LMSRMarket m_, MockUSDG usdg_, MockStockToken token_, uint64 halt_) {
-        (m, usdg, token, halt) = (m_, usdg_, token_, halt_);
+    constructor(LMSRMarket m_, MockUSDG usdg_, MockStockToken token_, uint64 halt_, address oracle_, address factory_) {
+        (m, usdg, token, halt, oracle, factoryAddr) = (m_, usdg_, token_, halt_, oracle_, factory_);
         for (uint256 i; i < 8; ++i) {
             actors[i] = address(uint160(0x1000 + i));
             usdg.mint(actors[i], 10_000_000e6);
@@ -76,6 +85,53 @@ contract MarketHandler is Test {
         token.setOraclePaused(r % 8 == 0); // paused for ~1 in 8 toggles
     }
 
+    /// @dev Ends the market rarely (after 20 trades, about 1 call in 64): guardian void before the halt, resolve after
+    ///      the close, or a settlement void after the halt. The trading invariants keep their depth.
+    function end(uint256 r) external {
+        ++calls;
+        if (m.state() != ILMSRMarket.State.Trading || buys + sells < 20 || r % 64 != 0) return;
+        uint256 mode = (r >> 8) % 3;
+        if (mode == 0 && block.timestamp < halt) {
+            vm.prank(factoryAddr);
+            m.voidMarket(9);
+            ++endedGuardian;
+            return;
+        }
+        if (mode == 1) {
+            uint64 close = m.config().closeTs;
+            if (block.timestamp < close) vm.warp(close);
+            uint8 winner = uint8((r >> 16) % m.config().n); // before the prank: config() is a call
+            vm.prank(oracle);
+            m.resolve(winner, 1);
+            ++endedResolve;
+            return;
+        }
+        if (block.timestamp < halt) vm.warp(halt);
+        vm.prank(oracle);
+        m.voidMarket(3);
+        ++endedVoid;
+    }
+
+    function claimAll() external {
+        ++calls;
+        if (m.state() == ILMSRMarket.State.Trading) return;
+        for (uint256 i; i < 8; ++i) {
+            try m.claim(actors[i]) returns (uint256 paid) {
+                if (paid > 0) ++claimsPaid;
+            } catch {
+                claimFailed = true;
+            }
+        }
+    }
+
+    function sweepNow() external {
+        ++calls;
+        if (m.state() == ILMSRMarket.State.Trading) return;
+        try m.sweep() {
+            ++sweeps;
+        } catch {} // AlreadySwept on repeats is fine
+    }
+
     function sumShares(uint8 k) external view returns (uint256 s) {
         for (uint256 i; i < 8; ++i) {
             s += m.shares(actors[i], k);
@@ -92,7 +148,7 @@ contract LMSRMarketInvariantTest is MarketFixture {
         uint256[] memory prior = new uint256[](5);
         (prior[0], prior[1], prior[2], prior[3], prior[4]) = (5e16, 2e17, 5e17, 2e17, 5e16);
         m = _market(IMarketFactory.Kind.RANGE, prior, BUDGET);
-        h = new MarketHandler(m, usdg, token, HALT);
+        h = new MarketHandler(m, usdg, token, HALT, oracle, address(this));
         targetContract(address(h));
     }
 
@@ -101,7 +157,24 @@ contract LMSRMarketInvariantTest is MarketFixture {
     }
 
     function invariant_I2_balanceCoversCashAndFees() public view {
-        assertGe(usdg.balanceOf(address(m)), m.cash() + m.feeEscrow());
+        (, uint256 returned,,) = pool.swept(address(m));
+        assertGe(usdg.balanceOf(address(m)) + m.paidOut() + returned, m.cash() + m.feeEscrow());
+    }
+
+    function invariant_I4_claimsWithinReserve() public view {
+        if (m.state() == ILMSRMarket.State.Trading) return;
+        assertLe(m.paidOut(), m.liability());
+        assertFalse(h.claimFailed(), "a claim reverted");
+    }
+
+    function invariant_I16_voidPricesInSimplex() public view {
+        if (m.state() != ILMSRMarket.State.Voided) return;
+        (,, uint256[] memory v) = m.finalInfo();
+        uint256 s;
+        for (uint256 i; i < v.length; ++i) {
+            s += v[i];
+        }
+        assertLe(s, 1e18);
     }
 
     function invariant_I3_pricesInClamp() public view {
@@ -123,6 +196,11 @@ contract LMSRMarketInvariantTest is MarketFixture {
         if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("buys", h.buys());
         if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("sells", h.sells());
         if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("calls", h.calls());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("endedGuardian", h.endedGuardian());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("endedResolve", h.endedResolve());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("endedVoid", h.endedVoid());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("claimsPaid", h.claimsPaid());
+        if (vm.envOr("LOG_TRADES", false)) emit log_named_uint("sweeps", h.sweeps());
         if (h.calls() >= 50) assertGt(h.buys() + h.sells(), 0, "no trade succeeded in a run");
     }
 
@@ -138,8 +216,50 @@ contract LMSRMarketInvariantTest is MarketFixture {
             if (t > hi) hi = t;
             if (t < lo) lo = t;
         }
-        assertEq(hi, m.liability());
+        if (m.state() == ILMSRMarket.State.Trading) {
+            assertEq(hi, m.liability());
+        } else {
+            (uint8 winner,, uint256[] memory v) = m.finalInfo();
+            if (m.state() == ILMSRMarket.State.Resolved) {
+                assertEq(m.liability(), h.sumShares(winner));
+            } else {
+                uint256 r;
+                for (uint8 k; k < 5; ++k) {
+                    r += (h.sumShares(k) * v[k] + 1e18 - 1) / 1e18;
+                }
+                assertEq(m.liability(), r);
+            }
+        }
         assertEq(pool.worst(address(m)), int256(m.cash() - hi));
         assertEq(pool.best(address(m)), int256(m.cash() - lo));
+    }
+
+    /// @dev Drives the handler's end, claim and sweep actions on one fresh market per end path.
+    function test_handler_reachesEveryEndPath() public {
+        for (uint256 mode; mode < 3; ++mode) {
+            vm.warp(CREATED); // an earlier path's end warps the clock forward
+            uint256[] memory prior = new uint256[](5);
+            (prior[0], prior[1], prior[2], prior[3], prior[4]) = (5e16, 2e17, 5e17, 2e17, 5e16);
+            LMSRMarket mk = _market(IMarketFactory.Kind.RANGE, prior, BUDGET);
+            MarketHandler hh = new MarketHandler(mk, usdg, token, HALT, oracle, address(this));
+            for (uint256 i; i < 24; ++i) {
+                hh.buy(i, uint8(i % 5), 1e6 + i * 1e5);
+            }
+            assertGe(hh.buys(), 20);
+            hh.end(mode << 8); // r % 64 == 0, mode in bits 8+, winner 0
+            ILMSRMarket.State want = mode == 1 ? ILMSRMarket.State.Resolved : ILMSRMarket.State.Voided;
+            assertTrue(mk.state() == want, "end state");
+            assertEq(hh.endedGuardian(), mode == 0 ? 1 : 0);
+            assertEq(hh.endedResolve(), mode == 1 ? 1 : 0);
+            assertEq(hh.endedVoid(), mode == 2 ? 1 : 0);
+            hh.claimAll();
+            hh.sweepNow();
+            assertFalse(hh.claimFailed());
+            assertGt(hh.claimsPaid(), 0, "a claim paid");
+            assertEq(hh.sweeps(), 1);
+            (, uint8 reason,) = mk.finalInfo();
+            if (mode == 0) assertEq(reason, 9);
+            if (mode == 2) assertEq(reason, 3);
+        }
     }
 }

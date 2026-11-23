@@ -240,8 +240,8 @@ Public repo `Panda-Dev-WEB3/Closari`. Repository settings: branch protection on 
 
 Found in the M1 final review. Each later milestone must honour these; the M1 factory relies on them.
 
-1. **M3 oracle:** it must finalise close results for listed days with zero or partially created markets. Otherwise the factory's reference walk (§4.4, check 10) reverts `PreviousDayNotFinal` and blocks listing for the next 3 trading days.
-2. **M3 `settleMarkets`:** it must skip `address(0)` entries in `DayInfo.markets`, and must treat `resolve`/`voidMarket` on an already-final market (for example after `guardianVoid`) as a no-op, so batches do not revert.
+1. **M3 oracle:** it must finalise close results for listed days with zero or partially created markets. Otherwise the factory's reference walk (§4.4, check 10) reverts `PreviousDayNotFinal` and blocks listing for the next 3 trading days. — done in M3: the oracle finalises any listed day's close independently of how many markets exist (SettlementOracle.submitClose/finalizeClose/voidExpired); SettlementE2E lists the next day from it.
+2. **M3 `settleMarkets`:** it must skip `address(0)` entries in `DayInfo.markets`, and must treat `resolve`/`voidMarket` on an already-final market (for example after `guardianVoid`) as a no-op, so batches do not revert. — done in M3: settleMarkets skips address(0) and any market not in Trading before calling it (SettlementOracleSettle.test_settle_skipsEmptyAndFinal_batchBountyOnce).
 3. **M7 pool:** refusals in `allocate` must revert with a non-empty custom error and must never wrap a gas-starved inner failure into one, because the factory treats empty revert data as `AllocationFailed` (and reverts the listing) while any non-empty revert skips the market.
 4. **M7 router:** `creditBounty` must never revert for an insufficient balance. It accrues a debt or caps the amount instead, so `listDay` and settlement cannot halt (I14).
 5. **`CA_AFTER = 3600`** must be identical in the factory, the market and the oracle. Move it into a shared constants library when M2 adds the market. — done in M2: `src/lib/Constants.sol` defines `CA_AFTER` once, and the factory and the market both read it.
@@ -255,14 +255,14 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 - **(a) LMSR opening price (final-review #6).** Markets open at uniform prices. ABOVE ±2% and ±5% open at 0.50 against true chances of about 0.25 and 0.05, and the reviewer estimates about 1.8 budgets per token per day lost to the first arbitrageurs. Options: a factory-seeded prior (a `Config` change), near-money strikes only, or listing before the open only. Owner: the product owners. Must be decided before M2 freezes market initialisation.
 - **(b) Listing vs. sweep ordering before M7.** Either a pool view such as `pendingSweeps()`, or a keeper rule to list only after the previous day's sweeps and `processQueue`.
 - **(c) Early-close days.** No listing until the 13:00 feed behaviour is confirmed. Enforce it with guardian `setSkip` or in the M4 keeper.
-- **(d) Pyth reference on the listing path.** The reference is caller-chosen within 120 s (the non-Unique parse). Document it as accepted, or switch to the Unique parse in M3.
+- **(d) Pyth reference on the listing path.** The reference is caller-chosen within 120 s (the non-Unique parse). Document it as accepted, or switch to the Unique parse in M3. — decided 2026-11-22: kept as is (caller-chosen within 120 s); accepted risk recorded in security/triage.md.
 - **(e) VPS.** Before M4, remove the `deploy` user from the `docker` group (use a forced-command/rrsync key) and add required reviewers to the `production` environment.
 
 ## Interface change log
 
 ### 2026-11-21 — IMarketFactory.TooEarly(uint32 dayId)
 - Change: new error; `listDay(D)` reverts until the previous trading day's close has passed (no bound if no session exists in the prior 10 days).
-- Why: the Task 9 review found that any caller could list far-future days with a stale Pyth reference, lock the calendar early, tie up pool budget and collect bounties. The Overview intends day D to be listed right after D−1 settles.
+- Why: review found that any caller could list far-future days with a stale Pyth reference, lock the calendar early, tie up pool budget and collect bounties. The Overview intends day D to be listed right after D−1 settles.
 - Affects: M4 keeper (`listDay` job already runs after D−1 is final); M8 deploy scripts.
 
 ### 2026-11-21 — IMarketFactory.NoMarketsOpened(address token, uint32 dayId)
@@ -284,3 +284,13 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 - Change: `ILMSRMarket.Config` adds `priorWad`, `baseFeeBps`, `rampMaxBps`; `ILMSRMarket` adds trading errors and the views `cumulativeAt(uint64)` and `checkpoints()`. `IStockTokenAllowList.Asset` adds `uint16 volBps` (required in [25, 2000] when listed). `IMarketFactory` adds `setFees(uint16,uint16)`, `fees()`, `FeesSet`, `BadFees`. `Constants.B_MIN` is now 100 shares (no ABI change).
 - Why: open decision (a), decided 2026-11-21 as a seeded opening price from per-asset volatility, with worst-case loss ≤ budget (M2 spec §3). Fee parameters are snapshotted per market (I9). The accumulator views feed the M3 void price.
 - Affects: M3 (reads checkpoints; implements settlement), M4 keeper/indexer (new Config fields, FeesSet), M5 API (quotes use the prior-seeded state), M8 deploy (volBps and fee values).
+
+### 2026-11-22 — ISettlementOracle: finalizeOpen, bounties, errors and events (M3)
+- Change: adds `finalizeOpen(address,uint32)`, `setBounties(uint96,uint96,uint96)` (onlyTimelock, each ≤ 5 USDG), `bounties()`, events `OpenFinal` and `BountiesSet`, and 14 custom errors (`NotListed`, `TooEarly`, `TooLate`, `AlreadyFinal`, `TierNotHigher`, `WrongFeed`, `InsufficientFee`, `NotFinal`, `NoUpDownMarket`, `BadOpen`, `PhaseMismatch`, `BadRound`, `NotTimelock`, `BountyTooHigh`). No existing signature changes.
+- Why: the open uses the same tier precedence as the close, so a tier B/C open needs a finalisation call after the improvement window (M3 spec §9.4); bounties are timelocked parameters (§9.5).
+- Affects: M4 keeper (calls `finalizeOpen` 30 min after a B/C open; reads `OpenFinal`), M4 indexer, M8 deploy (sets bounties through the timelock).
+
+### 2026-11-22 — ILMSRMarket: claimable, finalInfo and settlement errors (M3)
+- Change: adds `claimable(address) view returns (uint256)`, `finalInfo() view returns (uint8 winner, uint8 voidReason, uint256[] voidPricesWad)`, and errors `NotFactory`, `NotRouter`, `NotFinal`, `NotResolved`, `AlreadySwept`, `BadReason`, `TooEarly`. No existing signature changes.
+- Why: the UI, API and keeper need what an account can claim and the final outcome without replaying events (M3 spec §6–§7).
+- Affects: M4 indexer and API, M5 web app.

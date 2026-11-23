@@ -9,6 +9,7 @@ import {IStockToken} from "./interfaces/external/IStockToken.sol";
 import {IUSDG} from "./interfaces/external/IUSDG.sol";
 import {Constants} from "./lib/Constants.sol";
 import {LMSRMath} from "./lib/LMSRMath.sol";
+import {MarketSettlement} from "./lib/MarketSettlement.sol";
 import {ISignatureTransfer} from "permit2/ISignatureTransfer.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {ReentrancyGuardTransient} from "solady/utils/ReentrancyGuardTransient.sol";
@@ -16,7 +17,8 @@ import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
 /// @notice Fixed-b LMSR market, seeded with a prior (M2 spec §3). Clone implementation: clones share USDG and
-///         PERMIT2 through this contract's immutables. Settlement (resolve/void/claim/sweep/pullFees) lands in M3.
+///         PERMIT2 through this contract's immutables. Settlement (resolve/void/claim/sweep/pullFees) is implemented
+///         here as thin entry points; the settlement logic lives in the linked `MarketSettlement` library (M3 spec §3).
 contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     using SafeTransferLib for address;
 
@@ -92,6 +94,16 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     bool[2] internal _cpDone;
     uint256[4][2] internal _cp;
 
+    // Final state (M3).
+    uint8 internal _winner;
+    uint8 internal _voidReason;
+    bool internal _swept;
+    uint64[8] internal _v; // void prices, WAD, written once
+    uint256 internal _reserve; // owed to share holders at final; liability() after final
+    uint256 internal _feesPulled;
+    uint256 public paidOut; // share payouts claimed so far (fee refunds excluded)
+    mapping(address => bool) internal _claimed;
+
     constructor(address usdg, address permit2) {
         USDG = usdg;
         PERMIT2 = permit2;
@@ -106,22 +118,11 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
 
     function initialize(Config calldata c, address pool_, address oracle_, address router_, address staking_) external {
         if (_core.initialized) revert AlreadyInitialized();
+        uint256 pMin = MarketSettlement.validateConfig(c, pool_, oracle_);
         uint256 n = c.n;
-        if (
-            n < 2 || n > 8 || c.priorWad.length != n || c.bWad == 0 || c.bWad > type(uint128).max
-                || c.createdTs >= c.haltTs || c.haltTs >= c.closeTs || c.baseFeeBps > Constants.MAX_BASE_FEE_BPS
-                || c.rampMaxBps > Constants.MAX_RAMP_BPS || pool_ == address(0) || oracle_ == address(0)
-        ) revert BadConfig();
-        uint256 sum = 0;
-        uint256 pMin = type(uint256).max;
         for (uint256 i; i < n; ++i) {
-            uint256 p = c.priorWad[i];
-            if (p < Constants.PRIOR_MIN) revert BadConfig();
-            sum += p;
-            if (p < pMin) pMin = p;
-            _prior.push(p);
+            _prior.push(c.priorWad[i]);
         }
-        if (sum != 1e18) revert BadConfig();
 
         _core = Core(c.token, c.dayId, c.kind, c.n, State.Trading, true, false);
         _t = Times(c.createdTs, c.openTs, c.haltTs, c.closeTs);
@@ -192,6 +193,7 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     }
 
     function liability() external view returns (uint256 hi) {
+        if (_core.state != State.Trading) return _reserve;
         (hi,) = _liab(_xs());
     }
 
@@ -280,34 +282,65 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         if (_core.kind != IMarketFactory.Kind.UPDOWN) revert NotUpDown();
         if (_core.openRecorded) revert OpenAlreadySet();
         if (_core.state != State.Trading) revert NotTrading();
+        if (block.timestamp < _t.openTs) revert TooEarly();
+        // After the halt the accumulator must stay at or before haltTs, so a later void can read cumulativeAt(haltTs).
+        if (block.timestamp >= _t.haltTs) revert Halted();
         if (openPrice8 <= 0) revert BadConfig();
         _roll(prices(), _core.n);
         _edges.push(openPrice8);
         _core.openRecorded = true;
     }
 
-    function resolve(uint8, int64) external pure {
-        revert NotYetImplemented();
+    function resolve(uint8 winner, int64 settlePrice8) external {
+        if (msg.sender != oracle) revert NotOracle();
+        if (_core.state != State.Trading) revert NotTrading();
+        if (block.timestamp < _t.closeTs) revert TooEarly();
+        if (winner >= _core.n) revert BadOutcome();
+        _core.state = State.Resolved;
+        _winner = winner;
+        _reserve = (_x[winner] - _x0[winner]) / 1e12;
+        emit Resolved(winner, settlePrice8);
     }
 
-    function voidMarket(uint8) external pure {
-        revert NotYetImplemented();
+    /// @dev GUARDIAN only from the factory, before the halt. Every other reason only from the oracle: NO_OPEN for an
+    ///      UPDOWN market with no open at or after openTs, the rest at or after haltTs (M3 spec §4).
+    function voidMarket(uint8 reason) external {
+        if (_core.state != State.Trading) revert NotTrading();
+        _reserve = MarketSettlement.voidFinal(reason, _x, _x0, _v);
+        _core.state = State.Voided;
+        _voidReason = reason;
     }
 
-    function claim(address) external pure returns (uint256) {
-        revert NotYetImplemented();
+    function finalInfo() external view returns (uint8 winner, uint8 voidReason, uint256[] memory voidPricesWad) {
+        (winner, voidReason) = (_winner, _voidReason);
+        if (_core.state == State.Voided) voidPricesWad = _voidVec();
     }
 
-    function claimMany(address[] calldata) external pure {
-        revert NotYetImplemented();
+    function claim(address account) external nonReentrant returns (uint256) {
+        address[] memory one = new address[](1);
+        one[0] = account;
+        return _claimBatch(one);
     }
 
-    function sweep() external pure {
-        revert NotYetImplemented();
+    function claimMany(address[] calldata accounts) external nonReentrant {
+        _claimBatch(accounts);
     }
 
-    function pullFees() external pure returns (uint256) {
-        revert NotYetImplemented();
+    function claimable(address account) external view returns (uint256) {
+        return MarketSettlement.claimableOf(account, _claimed);
+    }
+
+    /// @notice Once, after final, permissionless. Fees never move here (pull model, Backend §3.8).
+    function sweep() external nonReentrant {
+        if (_swept) revert AlreadySwept();
+        _swept = true;
+        MarketSettlement.sweepFinal(_feesPulled, _x, _x0);
+    }
+
+    function pullFees() external nonReentrant returns (uint256 amount) {
+        amount = MarketSettlement.pullFeesTo();
+        feeEscrow = 0;
+        _feesPulled += amount;
     }
 
     // ------------------------------------------------------------------ internals
@@ -474,6 +507,15 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
         if (!ok || d > Constants.MAX_DISCOUNT_BPS) return 0;
     }
 
+    /// @dev The library pays and marks each account claimed. Only payments that succeeded are totalled (a deferred
+    ///      claim counts as zero), and only they move the market's totals.
+    function _claimBatch(address[] memory accounts) internal returns (uint256) {
+        (uint256 owed, uint256 fees) = MarketSettlement.claimBatch(accounts, _claimed);
+        paidOut += owed;
+        feeEscrow -= fees;
+        return owed + fees;
+    }
+
     function _xs() internal view returns (uint256[] memory x) {
         uint256 n = _core.n;
         x = new uint256[](n);
@@ -489,6 +531,14 @@ contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
             uint256 t = (x[i] - _x0[i]) / 1e12;
             if (t > hi) hi = t;
             if (t < lo) lo = t;
+        }
+    }
+
+    function _voidVec() internal view returns (uint256[] memory v) {
+        uint256 n = _core.n;
+        v = new uint256[](n);
+        for (uint256 i; i < n; ++i) {
+            v[i] = _v[i];
         }
     }
 

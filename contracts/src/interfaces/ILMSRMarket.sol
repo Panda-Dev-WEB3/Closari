@@ -33,6 +33,13 @@ interface ILMSRMarket {
     error WrongMarket();
     error WrongToken();
     error BadTimestamp();
+    error NotFactory();
+    error NotRouter();
+    error NotFinal();
+    error NotResolved();
+    error AlreadySwept();
+    error BadReason();
+    error TooEarly();
 
     struct Config {
         address token;
@@ -119,6 +126,10 @@ interface ILMSRMarket {
 
     function claim(address account) external returns (uint256 paid);
     function claimMany(address[] calldata accounts) external;
+    /// @notice What `claim(account)` would pay now: 0 before final or once claimed.
+    function claimable(address account) external view returns (uint256);
+    /// @notice winner is meaningful only when Resolved; voidPricesWad has n entries only when Voided (else empty).
+    function finalInfo() external view returns (uint8 winner, uint8 voidReason, uint256[] memory voidPricesWad);
     /// @notice Sends the final market's surplus to the pool. Does not move fees (pull model); see Swept.
     function sweep() external;
 

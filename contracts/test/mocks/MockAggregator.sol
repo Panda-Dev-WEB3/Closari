@@ -19,7 +19,14 @@ contract MockAggregator {
         if (roundId > _latest) _latest = roundId;
     }
 
+    bool public revertOnMissing;
+
+    function setRevertOnMissing(bool v) external {
+        revertOnMissing = v;
+    }
+
     function getRoundData(uint80 roundId) public view returns (uint80, int256, uint256, uint256, uint80) {
+        require(!revertOnMissing || _updatedAt[roundId] != 0, "No data present");
         return (roundId, _answer[roundId], _updatedAt[roundId], _updatedAt[roundId], roundId);
     }
 

@@ -303,6 +303,25 @@ export const iLMSRMarketAbi = [
   },
   {
     "type": "function",
+    "name": "claimable",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "config",
     "inputs": [],
     "outputs": [
@@ -457,6 +476,29 @@ export const iLMSRMarketAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalInfo",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "winner",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "voidReason",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "voidPricesWad",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
       }
     ],
     "stateMutability": "view"
@@ -967,6 +1009,11 @@ export const iLMSRMarketAbi = [
   },
   {
     "type": "error",
+    "name": "AlreadySwept",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "AwaitingOpen",
     "inputs": []
   },
@@ -978,6 +1025,11 @@ export const iLMSRMarketAbi = [
   {
     "type": "error",
     "name": "BadOutcome",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadReason",
     "inputs": []
   },
   {
@@ -1012,7 +1064,27 @@ export const iLMSRMarketAbi = [
   },
   {
     "type": "error",
+    "name": "NotFactory",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotFinal",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotOracle",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotResolved",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotRouter",
     "inputs": []
   },
   {
@@ -1043,6 +1115,11 @@ export const iLMSRMarketAbi = [
   {
     "type": "error",
     "name": "Slippage",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooEarly",
     "inputs": []
   },
   {
