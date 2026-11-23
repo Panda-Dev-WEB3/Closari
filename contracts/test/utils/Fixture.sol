@@ -54,6 +54,7 @@ abstract contract Fixture is Test {
     ExchangeCalendar internal calendar;
     StockTokenAllowList internal allowList;
     MarketFactory internal factory;
+    address internal oracleAddr;
 
     function setUp() public virtual {
         vm.warp(THU_OPEN - 3 hours);
@@ -62,10 +63,9 @@ abstract contract Fixture is Test {
         feed = new MockAggregator(8, "RHNVDA / USD");
         pyth = new MockPyth(120, 1);
         pool = new MockHousePool();
-        oracle = new MockSettlementOracle();
         router = new MockFeeRouter();
         marketImpl = MockMarket(_impl());
-        _deployCore(address(pyth));
+        _deployCore(_pythFor());
         _seedCalendar();
         _setNvda(PYTH_ID, true, BUDGET);
         vm.deal(lister, 1 ether);
@@ -76,17 +76,29 @@ abstract contract Fixture is Test {
         return address(new MockMarket());
     }
 
+    /// @dev The Pyth address the factory (and the M3 oracle) use. Settlement tests return a uniqueness-checking forwarder.
+    function _pythFor() internal virtual returns (address) {
+        return address(pyth);
+    }
+
+    /// @dev Deploys exactly ONE contract (the factory address prediction counts on it). M1/M2 tests keep the mock.
+    function _deployOracle(address, address) internal virtual returns (address) {
+        oracle = new MockSettlementOracle();
+        return address(oracle);
+    }
+
     /// @dev Calendar needs the factory address and the factory needs the calendar: predict by nonce.
     function _deployCore(address pyth_) internal {
-        address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
+        address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 3);
         calendar = new ExchangeCalendar(timelock, predicted);
         allowList = new StockTokenAllowList(address(beacon), address(nvda).codehash, timelock);
+        oracleAddr = _deployOracle(pyth_, predicted);
         factory = new MarketFactory(
             MarketFactory.Params({
                 calendar: address(calendar),
                 allowList: address(allowList),
                 pool: address(pool),
-                oracle: address(oracle),
+                oracle: oracleAddr,
                 router: address(router),
                 staking: staking,
                 pyth: pyth_,
