@@ -262,7 +262,7 @@ Found in the M1 final review. Each later milestone must honour these; the M1 fac
 
 ### 2026-11-21 — IMarketFactory.TooEarly(uint32 dayId)
 - Change: new error; `listDay(D)` reverts until the previous trading day's close has passed (no bound if no session exists in the prior 10 days).
-- Why: the Task 9 review found that any caller could list far-future days with a stale Pyth reference, lock the calendar early, tie up pool budget and collect bounties. The Overview intends day D to be listed right after D−1 settles.
+- Why: review found that any caller could list far-future days with a stale Pyth reference, lock the calendar early, tie up pool budget and collect bounties. The Overview intends day D to be listed right after D−1 settles.
 - Affects: M4 keeper (`listDay` job already runs after D−1 is final); M8 deploy scripts.
 
 ### 2026-11-21 — IMarketFactory.NoMarketsOpened(address token, uint32 dayId)

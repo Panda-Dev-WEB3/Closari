@@ -203,6 +203,8 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
     {
         ILMSRMarket.Config memory c = m.config();
         bool upDown = c.kind == IMarketFactory.Kind.UPDOWN;
+        // UPDOWN liveness: every trading session is longer than OPEN_WINDOW + IMPROVE_WINDOW (2.5 h; the shortest
+        // session is 3.5 h), so by settlement time the open is always either final or voidable (see _syncOpen).
         // slither-disable-next-line uninitialized-local -- triaged, security/triage.md T8
         PriceResult memory o;
         if (upDown) o = _syncOpen(token, dayId, d, m);
@@ -233,7 +235,8 @@ contract SettlementOracle is ISettlementOracle, ReentrancyGuardTransient {
         m.resolve(w, r.price8);
     }
 
-    /// @dev Brings the open up to date before settling an UPDOWN market (a missed finalizeOpen or voidNoOpen).
+    /// @dev Brings the open up to date before settling an UPDOWN market (a missed finalizeOpen or voidNoOpen). Both
+    ///      branches are reachable by close time because a session outlasts OPEN_WINDOW + IMPROVE_WINDOW (2.5 h).
     function _syncOpen(address token, uint32 dayId, IMarketFactory.DayInfo memory d, ILMSRMarket m)
         internal
         returns (PriceResult memory)

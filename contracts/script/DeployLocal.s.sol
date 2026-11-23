@@ -149,7 +149,7 @@ contract DeployLocal is Script {
         address router = address(new MockFeeRouter());
         address impl = address(new LMSRMarket(dep.usdg, PERMIT2));
 
-        // calendar, allow-list, oracle, factory: the factory is predicted at nonce + 3 (M3 plan adjustment 3)
+        // calendar, allow-list, oracle, factory: the factory is predicted at nonce + 3 (the oracle takes the factory address, so it deploys before the factory; M3 spec §2, deployment order)
         address predicted = vm.computeCreateAddress(deployer, vm.getNonce(deployer) + 3);
         dep.calendar = new ExchangeCalendar(address(dep.timelock), predicted);
         dep.allowList = new StockTokenAllowList(beacon, codehash, address(dep.timelock));

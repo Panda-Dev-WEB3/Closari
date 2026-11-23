@@ -17,7 +17,8 @@ import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
 /// @notice Fixed-b LMSR market, seeded with a prior (M2 spec §3). Clone implementation: clones share USDG and
-///         PERMIT2 through this contract's immutables. Settlement (resolve/void/claim/sweep/pullFees) lands in M3.
+///         PERMIT2 through this contract's immutables. Settlement (resolve/void/claim/sweep/pullFees) is implemented
+///         here as thin entry points; the settlement logic lives in the linked `MarketSettlement` library (M3 spec §3).
 contract LMSRMarket is ILMSRMarket, ReentrancyGuardTransient {
     using SafeTransferLib for address;
 

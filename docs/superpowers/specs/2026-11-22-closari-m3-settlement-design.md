@@ -37,12 +37,12 @@ M3 makes every listed market end, and pays everyone out:
 | Unit | Responsibility |
 |---|---|
 | `SettlementOracle` (new, one per deployment) | Close and open results per (token, dayId), the Chainlink cross-check, the CA freeze, `settleMarkets`, bounties. Constructor immutables: `pyth`, `factory`, `router`, `timelock` |
-| `LMSRMarket` | Storage, access checks and the entry points: `resolve`, `voidMarket`, `claim`, `claimMany`, `sweep`, `pullFees`, plus the new views `claimable` and `finalInfo`. The settlement-only logic is delegated to `MarketSettlement` (see below) |
+| `LMSRMarket` | Storage and the entry points: `resolve`, `voidMarket`, `claim`, `claimMany`, `sweep`, `pullFees`, plus the new views `claimable` and `finalInfo`. The oracle check on `resolve` stays in the market; `voidMarket`'s caller and timing checks and `pullFees`' router check run in `MarketSettlement`, as does the rest of the settlement-only logic (see below) |
 | `MarketSettlement` (new linked library, `public` functions, run by DELEGATECALL) | `validateConfig` (the `initialize` checks, §8), the void window (`voidPrices`, §5), claim, sweep and `pullFees` logic (§6, §7), and the per-account `voidOwed` and `voidReserve` maths. Because it runs by DELEGATECALL in the market's context, it moves USDG from the market's own address and reads market state through self-calls. Market behaviour and events are unchanged. |
 | `MarketFactory` | Unchanged code. `guardianVoid` now reaches a real `voidMarket` |
 | `PriceMath` (existing) | `to8`, `toTokenTerms`, `toTokenTermsConf`: still the only multiplier arithmetic (I11) |
 
-The library is not pure: it was widened to meet the size gate (controller rulings in Tasks 3 and 4), so `LMSRMarket` must be linked to it at deploy time, as well as to `PriorMath` (Forge scripts auto-link both). It adds no gas to trades: only settlement paths call it. **Size gate:** `LMSRMarket` runtime ≤ 23,500 B, which leaves about 1 KB below the 24,576 B limit for M7. `SettlementOracle` must stay under 24,576 B. Final runtime sizes (Task 8): `LMSRMarket` 23,419 B, `SettlementOracle` 17,854 B, `MarketSettlement` 13,228 B.
+The library is not pure: it was widened to meet the size gate (decided during implementation to meet the size gate), so `LMSRMarket` must be linked to it at deploy time, as well as to `PriorMath` (Forge scripts auto-link both). It adds no gas to trades: only settlement paths call it. **Size gate:** `LMSRMarket` runtime ≤ 23,500 B, which leaves about 1 KB below the 24,576 B limit for M7. `SettlementOracle` must stay under 24,576 B. Final runtime sizes (final): `LMSRMarket` 23,419 B, `SettlementOracle` 17,854 B, `MarketSettlement` 13,228 B.
 
 ## 4. Market: final states and who may call
 
@@ -75,6 +75,8 @@ The library is not pure: it was widened to meet the size gate (controller ruling
 
 ## 6. Claims
 
+The claim logic runs in `MarketSettlement` by DELEGATECALL from the market (see §3); the behaviour below is unchanged.
+
 - `claim(account)`: anyone may call; it always pays `account`. Returns the amount paid.
   - Resolved: `shares[account][winner]`.
   - Voided: `voidOwed = Σ_i floor(shares[account][i] · v_i / 1e18) + feesPaid[account]`. The fee part reduces `feeEscrow`.
@@ -86,6 +88,8 @@ The library is not pure: it was widened to meet the size gate (controller ruling
 - Reverts: `NotFinal` before the market is final. Protected by the existing reentrancy guard.
 
 ## 7. Sweep and fees
+
+The sweep and fee-pull logic runs in `MarketSettlement` by DELEGATECALL from the market (see §3); the behaviour below is unchanged.
 
 - `sweep()`: permissionless, once, after final (`NotFinal`, `AlreadySwept`).
   - Reserve: `t_w` on resolve; `voidReserve = Σ_i ceil(t_i · v_i / 1e18)` on void.

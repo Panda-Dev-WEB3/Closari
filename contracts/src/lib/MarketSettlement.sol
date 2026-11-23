@@ -11,7 +11,7 @@ import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 /// @notice Settlement maths for LMSRMarket (M3 spec §3). A linked library (public functions): its code lives once,
 ///         outside every market clone's bytecode budget, and no trade path calls it. Pure: the market passes in what
 ///         it reads from storage.
-interface IMarketFactoryOwner {
+interface IMarketSelf {
     function factory() external view returns (address);
     function oracle() external view returns (address);
     function pool() external view returns (address);
@@ -19,6 +19,12 @@ interface IMarketFactoryOwner {
     function USDG() external view returns (address);
 }
 
+/// @notice A linked library holding LMSRMarket's settlement logic (M3 spec §3): config checks, void prices and reserve,
+///         claims, sweep and fee pull. Its code lives once, outside every market clone's bytecode budget, and no trade
+///         path calls it. It runs by DELEGATECALL in the market's context: it reads the market through self-calls to
+///         the market's public views and through storage parameters, moves USDG from the market's address and emits
+///         the market's events. Its state-changing functions cannot be called directly (Solidity's library call
+///         protection).
 library MarketSettlement {
     using SafeTransferLib for address;
 
@@ -135,7 +141,7 @@ library MarketSettlement {
     function sweepFinal(uint256 feesPulled, uint256[8] storage x, uint256[8] storage x0) public {
         ILMSRMarket m = ILMSRMarket(address(this));
         if (m.state() == ILMSRMarket.State.Trading) revert ILMSRMarket.NotFinal();
-        address pool = IMarketFactoryOwner(address(m)).pool();
+        address pool = IMarketSelf(address(m)).pool();
         uint256 c = m.cash();
         uint256 reserve = m.liability(); // the reserve once final
         uint256 returned = c > reserve ? c - reserve : 0;
@@ -146,7 +152,7 @@ library MarketSettlement {
             if (t > hi) hi = t;
             if (t < lo) lo = t;
         }
-        if (returned != 0) IMarketFactoryOwner(address(m)).USDG().safeTransfer(pool, returned);
+        if (returned != 0) IMarketSelf(address(m)).USDG().safeTransfer(pool, returned);
         IHousePool(pool).onSweep(m.config().budget, returned, c - hi, c - lo);
         emit ILMSRMarket.Swept(returned, feesPulled);
     }
@@ -168,8 +174,20 @@ library MarketSettlement {
         if (paid == 0) return (0, 0);
         claimed[a] = true;
         (bool ok, bytes memory ret) =
-            IMarketFactoryOwner(address(this)).USDG().call(abi.encodeWithSelector(0xa9059cbb, a, paid));
-        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) {
+            IMarketSelf(address(this)).USDG().call(abi.encodeWithSelector(0xa9059cbb, a, paid));
+        // Non-reverting success check: an empty return, or a first word equal to 1. Malformed data defers the claim.
+        bool good = ok;
+        if (ok && ret.length != 0) {
+            good = false;
+            if (ret.length >= 32) {
+                uint256 word;
+                assembly ("memory-safe") {
+                    word := mload(add(ret, 32))
+                }
+                good = word == 1;
+            }
+        }
+        if (!good) {
             claimed[a] = false;
             emit ILMSRMarket.ClaimDeferred(a, paid);
             return (0, 0);
@@ -200,11 +218,11 @@ library MarketSettlement {
     ///         The market zeroes feeEscrow and counts the pull afterwards (the caller holds the reentrancy guard).
     function pullFeesTo() public returns (uint256 amount) {
         ILMSRMarket m = ILMSRMarket(address(this));
-        address router = IMarketFactoryOwner(address(m)).router();
+        address router = IMarketSelf(address(m)).router();
         if (msg.sender != router) revert ILMSRMarket.NotRouter();
         if (m.state() != ILMSRMarket.State.Resolved) revert ILMSRMarket.NotResolved();
         amount = m.feeEscrow();
-        if (amount != 0) IMarketFactoryOwner(address(m)).USDG().safeTransfer(router, amount);
+        if (amount != 0) IMarketSelf(address(m)).USDG().safeTransfer(router, amount);
     }
 
     /// @notice What a voided market keeps back for share claims: Σ_i ceil(t_i · v_i / 1e18) ≥ Σ_accounts voidOwed.
@@ -223,8 +241,8 @@ library MarketSettlement {
         bool upDown = c.kind == IMarketFactory.Kind.UPDOWN;
         bool openRecorded = c.edges.length != 0;
         if (reason == 9) {
-            if (caller != IMarketFactoryOwner(address(m)).factory()) revert ILMSRMarket.NotFactory();
-        } else if (caller != IMarketFactoryOwner(address(m)).oracle()) {
+            if (caller != IMarketSelf(address(m)).factory()) revert ILMSRMarket.NotFactory();
+        } else if (caller != IMarketSelf(address(m)).oracle()) {
             revert ILMSRMarket.NotOracle();
         }
         if (reason == 9) {

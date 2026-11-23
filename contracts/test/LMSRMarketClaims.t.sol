@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {LMSRMarket} from "../src/LMSRMarket.sol";
 import {ILMSRMarket} from "../src/interfaces/ILMSRMarket.sol";
 import {IMarketFactory} from "../src/interfaces/IMarketFactory.sol";
+import {MockMalformedTransferToken} from "./mocks/MockMalformedTransferToken.sol";
 import {MockUSDG} from "./mocks/MockUSDG.sol";
 import {MarketFixture} from "./utils/MarketFixture.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
@@ -82,6 +83,41 @@ contract LMSRMarketClaimsTest is MarketFixture {
         assertEq(m.paidOut(), 30e6);
         usdg.setFrozen(alice, false);
         assertEq(m.claim(alice), 100e6);
+    }
+
+    /// @dev A token whose `transfer` returns malformed data must defer the claim, never revert it.
+    function _malformedTransfer(uint256 mode) internal {
+        vm.etch(address(usdg), address(new MockMalformedTransferToken()).code);
+        vm.store(address(usdg), bytes32(0), bytes32(mode));
+    }
+
+    function test_claim_malformedReturn_deferredNotReverted() public {
+        _resolveYes();
+        uint256[3] memory modes = [uint256(1), 2, 3]; // 1 byte, the word 2, the word 0
+        for (uint256 i; i < modes.length; ++i) {
+            _malformedTransfer(modes[i]);
+            vm.expectEmit(true, false, false, true, address(m));
+            emit ILMSRMarket.ClaimDeferred(alice, 100e6);
+            assertEq(m.claim(alice), 0);
+            assertEq(m.claimable(alice), 100e6); // still owed
+            assertEq(m.paidOut(), 0);
+        }
+    }
+
+    function test_claimMany_malformedReturn_doesNotRevertBatch() public {
+        _resolveYes();
+        _malformedTransfer(2);
+        vm.expectEmit(true, false, false, true, address(m));
+        emit ILMSRMarket.ClaimDeferred(alice, 100e6);
+        m.claimMany(_addrs(alice, carol)); // must not revert
+        assertEq(m.claimable(alice), 100e6);
+        assertEq(m.claimable(carol), 30e6);
+        // a healthy token pays everyone afterwards: restore the mode to "returns nothing" (accepted)
+        vm.store(address(usdg), bytes32(0), bytes32(uint256(0)));
+        m.claimMany(_addrs(alice, carol));
+        assertEq(m.claimable(alice), 0);
+        assertEq(m.claimable(carol), 0);
+        assertEq(m.paidOut(), 130e6);
     }
 
     function test_claim_pausedToken_deferred_stateUnchanged() public {
