@@ -333,7 +333,7 @@ const documents = {
   access: {
     title: "Access & integrations",
     intro:
-      "The paper preview is a local demonstration. The live protocol and connected services are still in design.",
+      "A local demonstration. The live protocol is still in design.",
     sections: [
       [
         "Planned market access",
@@ -363,7 +363,7 @@ const documents = {
       ],
       [
         "Photographs and files",
-        "The site serves its fonts, editorial artwork and stock marks from the same origin.",
+        "The adapted site serves its fonts, editorial artwork and stock marks from the same origin. The archived Gobo comparison uses original external resources.",
       ],
     ],
   },

@@ -311,7 +311,7 @@ export const articles = [
     "access",
     "What $CLSR unlocks",
     "Access",
-    "A closer look at the proposed access tiers and base-fee discounts.",
+    "The proposed access tiers and fee discounts.",
     "technology",
     "A physical pass slides into an access reader.",
   ],

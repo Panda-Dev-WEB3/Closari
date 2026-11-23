@@ -540,8 +540,11 @@
   font-size: clamp(24px, 2.5vw, 39px);
 }
 .doc-links p {
-  max-width: 47%;
+  max-width: none;
   font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .doc-sections {
   max-width: 880px;
